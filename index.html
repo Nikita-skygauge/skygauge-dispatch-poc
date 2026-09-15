@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Skygauge Dispatch — Dofasco</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --ground:#0f1316;
+    --panel:#171d21;
+    --panel-2:#1e2529;
+    --line:#2a3238;
+    --line-strong:#3a444b;
+    --text:#e8ebed;
+    --text-2:#a3adb4;
+    --text-3:#6e7a82;
+    --accent:#f08a24;          /* heated steel */
+    --accent-ink:#1a1206;
+    --req:#7f8f9b;             /* requested: cold slate */
+    --prog:#f08a24;            /* in progress: amber */
+    --done:#4fb583;            /* delivered: green */
+    --danger:#e2574f;
+    --display:"Barlow Condensed", "Arial Narrow", Impact, sans-serif;
+    --body:"Barlow", "Helvetica Neue", Arial, sans-serif;
+    --mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+    --dock-h: clamp(220px, 34vh, 340px);
+    color-scheme: dark;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--ground);color:var(--text);
+    font:14px/1.4 var(--body);
+    display:flex;flex-direction:column;
+    overflow:hidden;
+  }
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  button:focus-visible,input:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---------- top bar ---------- */
+  header{
+    display:flex;align-items:center;gap:16px;
+    padding:0 16px;height:52px;flex:0 0 auto;
+    background:var(--panel);border-bottom:1px solid var(--line);
+  }
+  .brand{display:flex;align-items:baseline;gap:10px;white-space:nowrap}
+  .brand .name{font:600 22px/1 var(--display);letter-spacing:.02em;text-transform:uppercase}
+  .brand .name b{color:var(--accent);font-weight:700}
+  .brand .site{color:var(--text-2);font-size:13px}
+  .brand .site::before{content:"/";color:var(--text-3);margin-right:10px}
+  .stats{display:flex;gap:14px;margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--text-2)}
+  .stats span i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .actions{display:flex;gap:6px}
+  .btn{
+    padding:7px 12px;border:1px solid var(--line-strong);border-radius:4px;
+    background:var(--panel-2);color:var(--text);font-size:13px;font-weight:500;white-space:nowrap
+  }
+  .btn:hover{border-color:var(--text-3)}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:600}
+  .btn.quiet{background:none;color:var(--text-2)}
+
+  /* ---------- map ---------- */
+  #stage{position:relative;flex:1 1 auto;min-height:160px;background:#0a0d0f}
+  gmp-map-3d{position:absolute;inset:0;width:100%;height:100%}
+  #hud{
+    position:absolute;left:16px;top:16px;pointer-events:none;
+    display:flex;flex-direction:column;gap:6px;max-width:min(360px,calc(100% - 32px))
+  }
+  .hud-card{
+    pointer-events:auto;background:rgba(15,19,22,.86);backdrop-filter:blur(6px);
+    border:1px solid var(--line);border-left:3px solid var(--accent);
+    padding:10px 12px;border-radius:4px
+  }
+  .hud-card .eyebrow{font:500 11px/1 var(--mono);color:var(--text-3);letter-spacing:.06em;text-transform:uppercase}
+  .hud-card .title{font:600 20px/1.1 var(--display);margin:4px 0 2px}
+  .hud-card .meta{color:var(--text-2);font-size:12px;font-family:var(--mono)}
+  #legend{
+    position:absolute;right:16px;bottom:12px;display:flex;gap:12px;
+    background:rgba(15,19,22,.86);border:1px solid var(--line);border-radius:4px;
+    padding:6px 10px;font:500 11px/1 var(--mono);color:var(--text-2);letter-spacing:.04em;text-transform:uppercase
+  }
+  #legend span i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:-1px}
+  #mapNote{
+    position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--text-2);font-family:var(--mono);font-size:13px;text-align:center;padding:24px
+  }
+
+  /* ---------- kanban dock ---------- */
+  #dock{
+    flex:0 0 var(--dock-h);display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+    background:var(--line);border-top:1px solid var(--line-strong)
+  }
+  .col{display:flex;flex-direction:column;background:var(--panel);min-width:0}
+  .col.over{background:var(--panel-2)}
+  .col-head{
+    display:flex;align-items:center;gap:8px;padding:10px 14px 8px;
+    border-bottom:1px solid var(--line);flex:0 0 auto
+  }
+  .col-head h2{margin:0;font:600 15px/1 var(--display);letter-spacing:.06em;text-transform:uppercase}
+  .col-head .dot{width:9px;height:9px;border-radius:50%}
+  .col-head .count{margin-left:auto;font:500 12px/1 var(--mono);color:var(--text-3)}
+  .col-head .hint{font-size:11px;color:var(--text-3);font-weight:400;letter-spacing:0;text-transform:none;margin-left:6px}
+  .cards{flex:1 1 auto;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px}
+  .cards::-webkit-scrollbar{width:8px}
+  .cards::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:4px}
+
+  .card{
+    background:var(--panel-2);border:1px solid var(--line);border-radius:4px;
+    padding:9px 10px 8px;cursor:grab;position:relative;
+    border-left:3px solid var(--state);
+    transition:border-color .15s, box-shadow .15s
+  }
+  .card:hover{border-color:var(--line-strong);border-left-color:var(--state)}
+  .card.active{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
+  .card.dragging{opacity:.45}
+  .card .row{display:flex;align-items:baseline;gap:8px}
+  .card .wo{font:500 11px/1 var(--mono);color:var(--text-3);letter-spacing:.02em}
+  .card .asset{font:600 16px/1.15 var(--display);margin:3px 0 2px;text-wrap:balance}
+  .card .scope{color:var(--text-2);font-size:12.5px;line-height:1.35}
+  .card .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:7px}
+  .tag{font:500 10.5px/1 var(--mono);padding:3px 6px;border-radius:3px;background:var(--ground);color:var(--text-2);border:1px solid var(--line)}
+  .tag.std{color:var(--text)}
+  .tag.hazard{color:#f3b27a;border-color:#4a3320}
+  .card .foot{display:flex;align-items:center;gap:8px;margin-top:8px;font:500 11px/1 var(--mono);color:var(--text-3)}
+  .card .foot .due{margin-right:auto}
+  .card .adv{
+    padding:4px 8px;border-radius:3px;border:1px solid var(--line-strong);
+    font:500 11px/1 var(--body);color:var(--text-2)
+  }
+  .card .adv:hover{color:var(--text);border-color:var(--text-3)}
+  .card .adv.back{padding:4px 6px}
+  .empty{color:var(--text-3);font-size:12px;padding:16px 6px;text-align:center;font-family:var(--mono)}
+
+  /* ---------- key gate ---------- */
+  #gate{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:rgba(10,13,15,.92);z-index:10;padding:16px;overflow-y:auto
+  }
+  #gate[hidden]{display:none}
+  .gate-box{
+    width:min(560px,100%);margin:auto;background:var(--panel);border:1px solid var(--line-strong);
+    border-top:3px solid var(--accent);border-radius:4px;padding:22px 24px
+  }
+  .gate-box h1{margin:0 0 4px;font:700 28px/1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+  .gate-box p{margin:6px 0;color:var(--text-2)}
+  .gate-box ol{margin:10px 0 14px;padding-left:20px;color:var(--text-2);font-size:13px}
+  .gate-box ol li{margin:4px 0}
+  .gate-box code{font-family:var(--mono);font-size:12px;color:var(--text);background:var(--ground);padding:1px 5px;border-radius:3px}
+  .gate-row{display:flex;gap:8px;margin-top:12px}
+  .gate-row input{
+    flex:1;min-width:0;padding:9px 11px;border:1px solid var(--line-strong);border-radius:4px;
+    background:var(--ground);color:var(--text);font:13px var(--mono)
+  }
+  .gate-err{color:var(--danger);font-size:13px;margin-top:8px;min-height:1.2em}
+
+  @media (max-width:760px){
+    :root{--dock-h:46vh}
+    header{height:auto;padding:8px 16px;flex-wrap:wrap;gap:8px}
+    .brand{flex-wrap:wrap}
+    .stats{display:none}
+    .actions{margin-left:auto}
+    #dock{grid-template-columns:none;grid-auto-flow:column;grid-auto-columns:82vw;overflow-x:auto;scroll-snap-type:x mandatory}
+    .col{scroll-snap-align:start}
+    #legend{display:none}
+    #hud{max-width:calc(100% - 32px)}
+  }
+  @media (prefers-reduced-motion:reduce){ *{transition:none!important} }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="name">Sky<b>gauge</b> Dispatch</span>
+    <span class="site">ArcelorMittal Dofasco · Hamilton, ON · POC</span>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="actions">
+    <button class="btn" id="btnOverview" title="Fly the camera around the whole site">Site flyover</button>
+    <button class="btn quiet" id="btnReset" title="Restore the sample work orders to their starting columns">Reset demo</button>
+    <button class="btn quiet" id="btnKey" title="Change the Google Maps API key stored in this browser">Key</button>
+  </div>
+</header>
+
+<div id="stage">
+  <div id="mapNote">Loading photorealistic 3D…</div>
+  <div id="hud"></div>
+  <div id="legend">
+    <span><i style="background:var(--req)"></i>Requested</span>
+    <span><i style="background:var(--prog)"></i>In progress</span>
+    <span><i style="background:var(--done)"></i>Delivered</span>
+  </div>
+
+  <div id="gate" hidden>
+    <div class="gate-box">
+      <h1>Connect Google Maps</h1>
+      <p>This POC renders the Dofasco works in Google's photorealistic 3D. It needs a Maps JavaScript API key, stored only in this browser — never in the page file.</p>
+      <ol>
+        <li>Google Cloud Console → create a project → enable billing (the monthly free credit covers a demo).</li>
+        <li>APIs &amp; Services → Library → enable <code>Maps JavaScript API</code>.</li>
+        <li>Credentials → Create API key. Restrict it: <em>Application restrictions → Websites</em> → add the domain you host this file on (e.g. <code>https://your-site.netlify.app/*</code>). <em>API restrictions</em> → Maps JavaScript API only.</li>
+        <li>Paste the key below.</li>
+      </ol>
+      <div class="gate-row">
+        <input id="keyInput" type="text" autocomplete="off" spellcheck="false" placeholder="AIza…" aria-label="Google Maps API key">
+        <button class="btn primary" id="keySave">Load map</button>
+      </div>
+      <div class="gate-err" id="keyErr"></div>
+    </div>
+  </div>
+</div>
+
+<section id="dock" aria-label="Dispatch board">
+  <div class="col" data-state="requested">
+    <div class="col-head"><span class="dot" style="background:var(--req)"></span><h2>Requested</h2><span class="hint">plant submits scope</span><span class="count"></span></div>
+    <div class="cards"></div>
+  </div>
+  <div class="col" data-state="progress">
+    <div class="col-head"><span class="dot" style="background:var(--prog)"></span><h2>In progress</h2><span class="hint">Skygauge on site / flying</span><span class="count"></span></div>
+    <div class="cards"></div>
+  </div>
+  <div class="col" data-state="delivered">
+    <div class="col-head"><span class="dot" style="background:var(--done)"></span><h2>Delivered</h2><span class="hint">data + report in</span><span class="count"></span></div>
+    <div class="cards"></div>
+  </div>
+</section>
+
+<script>
+/* =====================================================================
+   DATA — sample work orders. Coordinates are approximate placements on
+   the Dofasco footprint for demo purposes; edit lat/lng/height per asset.
+   height  = approx structure height (m) — sets pin altitude + extrusion
+   scanAlt = drone standoff altitude above ground for the scan path (m)
+   ===================================================================== */
+const SITE = { lat: 43.2708, lng: -79.8150 };
+
+const WORK_ORDERS = [
+  { id:"WO-2609-014", asset:"No. 4 Blast Furnace — Stove Stack", lat:43.2716, lng:-79.8128, height:82, scanAlt:60,
+    scope:"UT thickness grid on stack shell, 0–40 m elevation. Suspected CUI at insulation seams.",
+    method:"Contact UT", std:"API 570 / RP 574", hazards:["Live process","Heat"], req:"J. Marsh, Integrity", due:"Sep 22", state:"progress", footprint:12 },
+  { id:"WO-2609-011", asset:"KOBM Baghouse Stack", lat:43.2727, lng:-79.8102, height:74, scanAlt:55,
+    scope:"External visual + UT spot checks at 6 elevations. Replaces rope-access scope.",
+    method:"Visual + UT", std:"API 570", hazards:["Live process"], req:"J. Marsh, Integrity", due:"Sep 19", state:"progress", footprint:10 },
+  { id:"WO-2609-009", asset:"BF Gas Holder", lat:43.2719, lng:-79.8192, height:48, scanAlt:35,
+    scope:"Roof plate thickness survey, 3 m grid. Confined-space entry avoided.",
+    method:"Contact UT", std:"API 653", hazards:["Gas hazard"], req:"R. Okafor, Reliability", due:"Sep 17", state:"delivered", footprint:36 },
+  { id:"WO-2609-021", asset:"No. 2 Blast Furnace — Uptakes & Downcomer", lat:43.2706, lng:-79.8164, height:70, scanAlt:50,
+    scope:"Thermal + visual survey of refractory hot spots on uptakes; UT on downcomer elbows.",
+    method:"IR + UT", std:"API 570", hazards:["Live process","Heat"], req:"J. Marsh, Integrity", due:"Oct 3", state:"requested", footprint:22 },
+  { id:"WO-2609-018", asset:"Boiler House Stack — Utilities", lat:43.2696, lng:-79.8204, height:65, scanAlt:48,
+    scope:"Full-height UT thickness on flue shell; corrosion at 28–34 m from prior inspection.",
+    method:"Contact UT", std:"CSA B51 / API 570", hazards:["Heat"], req:"D. Leung, Utilities", due:"Sep 30", state:"requested", footprint:9 },
+  { id:"WO-2609-006", asset:"Fuel Oil Tank T-102", lat:43.2668, lng:-79.8238, height:16, scanAlt:22,
+    scope:"Shell course UT, courses 1–4, 4 quadrants. Roof visual for pitting.",
+    method:"Contact UT", std:"API 653", hazards:["Flammable"], req:"R. Okafor, Reliability", due:"Sep 12", state:"delivered", footprint:40 },
+  { id:"WO-2609-024", asset:"Hot Strip Mill — Roof Trusses & Vents", lat:43.2681, lng:-79.8082, height:28, scanAlt:30,
+    scope:"Visual survey of roof cladding, gutters and monitor vents ahead of winter shutdown.",
+    method:"Visual", std:"Owner spec", hazards:["Fall exposure"], req:"P. Singh, Facilities", due:"Oct 10", state:"requested", footprint:90 },
+  { id:"WO-2609-016", asset:"Desulphurization Baghouse Stack", lat:43.2712, lng:-79.8118, height:55, scanAlt:42,
+    scope:"UT thickness at 4 elevations; inspect stack-to-duct weld externally.",
+    method:"Contact UT", std:"API 570", hazards:["Live process"], req:"J. Marsh, Integrity", due:"Sep 25", state:"progress", footprint:8 },
+  { id:"WO-2609-003", asset:"Wastewater Clarifier No. 3", lat:43.2752, lng:-79.8142, height:6, scanAlt:18,
+    scope:"Launder and weir visual; UT on steel bridge members.",
+    method:"Visual + UT", std:"Owner spec", hazards:[], req:"D. Leung, Utilities", due:"Sep 5", state:"delivered", footprint:34 },
+  { id:"WO-2609-027", asset:"DRI/EAF Project — Structural Steel", lat:43.2733, lng:-79.8062, height:40, scanAlt:35,
+    scope:"Progress + QA visual on erected columns and crane rail welds (construction phase).",
+    method:"Visual", std:"CSA W59", hazards:["Active construction"], req:"A. Ferreira, Projects", due:"Oct 15", state:"requested", footprint:60 },
+];
+
+const STATES = {
+  requested:{ label:"Requested", color:"#7f8f9b", rgba:"rgba(127,143,155," },
+  progress: { label:"In progress", color:"#f08a24", rgba:"rgba(240,138,36," },
+  delivered:{ label:"Delivered", color:"#4fb583", rgba:"rgba(79,181,131," },
+};
+const ORDER = ["requested","progress","delivered"];
+
+/* ---------- state persistence (per browser) ---------- */
+const LS_STATE = "sgd_state_v1", LS_KEY = "sgd_gmaps_key";
+function loadStates(){ try{ return JSON.parse(localStorage.getItem(LS_STATE)||"{}"); }catch{ return {}; } }
+function saveStates(){ try{ const o={}; WORK_ORDERS.forEach(w=>o[w.id]=w.state); localStorage.setItem(LS_STATE, JSON.stringify(o)); }catch{} }
+(function applySaved(){ const s=loadStates(); WORK_ORDERS.forEach(w=>{ if(s[w.id] && STATES[s[w.id]]) w.state=s[w.id]; }); })();
+
+/* ---------- board ---------- */
+let activeId = null;
+const cols = {};
+document.querySelectorAll(".col").forEach(c=>cols[c.dataset.state]=c);
+
+function renderBoard(){
+  ORDER.forEach(st=>{
+    const wrap = cols[st].querySelector(".cards"); wrap.innerHTML="";
+    const items = WORK_ORDERS.filter(w=>w.state===st);
+    cols[st].querySelector(".count").textContent = items.length;
+    if(!items.length){ wrap.innerHTML = '<div class="empty">nothing here</div>'; }
+    items.forEach(w=>wrap.appendChild(cardEl(w)));
+  });
+  const n = st=>WORK_ORDERS.filter(w=>w.state===st).length;
+  document.getElementById("stats").innerHTML =
+    `<span><i style="background:${STATES.requested.color}"></i>${n("requested")} requested</span>`+
+    `<span><i style="background:${STATES.progress.color}"></i>${n("progress")} in progress</span>`+
+    `<span><i style="background:${STATES.delivered.color}"></i>${n("delivered")} delivered</span>`;
+}
+
+function cardEl(w){
+  const el = document.createElement("article");
+  el.className = "card" + (w.id===activeId?" active":"");
+  el.style.setProperty("--state", STATES[w.state].color);
+  el.draggable = true; el.dataset.id = w.id; el.tabIndex = 0;
+  const idx = ORDER.indexOf(w.state);
+  el.innerHTML = `
+    <div class="row"><span class="wo">${w.id}</span><span class="wo" style="margin-left:auto">${w.height} m · ${w.method}</span></div>
+    <div class="asset">${w.asset}</div>
+    <div class="scope">${w.scope}</div>
+    <div class="tags"><span class="tag std">${w.std}</span>${w.hazards.map(h=>`<span class="tag hazard">${h}</span>`).join("")}<span class="tag">${w.req}</span></div>
+    <div class="foot">
+      <span class="due">due ${w.due}</span>
+      ${idx>0?`<button class="adv back" data-dir="-1" title="Move back to ${STATES[ORDER[idx-1]].label}">◂</button>`:""}
+      ${idx<ORDER.length-1?`<button class="adv" data-dir="1">${idx===0?"Accept ▸":"Deliver ▸"}</button>`:""}
+    </div>`;
+  el.addEventListener("click", e=>{
+    const b = e.target.closest(".adv");
+    if(b){ e.stopPropagation(); moveTo(w, ORDER[idx+Number(b.dataset.dir)]); return; }
+    focusAsset(w.id, true);
+  });
+  el.addEventListener("keydown", e=>{ if(e.key==="Enter") focusAsset(w.id,true); });
+  el.addEventListener("dragstart", e=>{ e.dataTransfer.setData("text/plain", w.id); e.dataTransfer.effectAllowed="move"; el.classList.add("dragging"); });
+  el.addEventListener("dragend", ()=>el.classList.remove("dragging"));
+  return el;
+}
+
+Object.values(cols).forEach(col=>{
+  col.addEventListener("dragover", e=>{ e.preventDefault(); e.dataTransfer.dropEffect="move"; col.classList.add("over"); });
+  col.addEventListener("dragleave", ()=>col.classList.remove("over"));
+  col.addEventListener("drop", e=>{
+    e.preventDefault(); col.classList.remove("over");
+    const w = WORK_ORDERS.find(x=>x.id===e.dataTransfer.getData("text/plain"));
+    if(w) moveTo(w, col.dataset.state);
+  });
+});
+
+function moveTo(w, state){
+  if(!STATES[state] || w.state===state) return;
+  w.state = state; saveStates(); renderBoard(); updateMarker(w);
+  focusAsset(w.id, false);
+}
+
+document.getElementById("btnReset").addEventListener("click", ()=>{
+  try{ localStorage.removeItem(LS_STATE); }catch{}
+  location.reload();
+});
+
+/* ---------- map ---------- */
+let map=null, lib=null, markerLib=null;
+const overlays = {};   // id -> {marker, pin, poly, path}
+const hud = document.getElementById("hud");
+const mapNote = document.getElementById("mapNote");
+
+function getKey(){
+  const q = new URLSearchParams(location.search).get("key");
+  if(q){ try{ localStorage.setItem(LS_KEY,q); }catch{} history.replaceState(null,"",location.pathname); return q; }
+  try{ return localStorage.getItem(LS_KEY)||""; }catch{ return ""; }
+}
+function showGate(err){
+  document.getElementById("gate").hidden = false;
+  document.getElementById("keyErr").textContent = err||"";
+  mapNote.textContent = "";
+  setTimeout(()=>document.getElementById("keyInput").focus(), 50);
+}
+document.getElementById("keySave").addEventListener("click", ()=>{
+  const k = document.getElementById("keyInput").value.trim();
+  if(!/^AIza[0-9A-Za-z_\-]{20,}$/.test(k)){ document.getElementById("keyErr").textContent="That doesn't look like a Google Maps key (they start with AIza)."; return; }
+  try{ localStorage.setItem(LS_KEY,k); }catch{}
+  location.reload();
+});
+document.getElementById("keyInput").addEventListener("keydown", e=>{ if(e.key==="Enter") document.getElementById("keySave").click(); });
+document.getElementById("btnKey").addEventListener("click", ()=>{ try{ localStorage.removeItem(LS_KEY); }catch{} location.reload(); });
+
+// Google calls this on an invalid / unauthorized key.
+window.gm_authFailure = ()=> showGate("Google rejected this key. Check that Maps JavaScript API is enabled, billing is on, and the key's website restriction includes this page's origin: " + location.origin);
+
+function loadGoogle(key){
+  return new Promise((res,rej)=>{
+    // Official bootstrap loader (v=beta for the maps3d library).
+    (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({ key, v:"beta" });
+    res();
+  });
+}
+
+async function initMap(){
+  const key = getKey();
+  if(!key){ showGate(); return; }
+  try{
+    await loadGoogle(key);
+    lib = await google.maps.importLibrary("maps3d");
+    markerLib = await google.maps.importLibrary("marker");
+  }catch(e){ showGate("Could not load Google Maps: "+(e.message||e)); return; }
+
+  const { Map3DElement } = lib;
+  map = new Map3DElement({
+    center:{ lat:SITE.lat, lng:SITE.lng, altitude:0 },
+    range:2600, tilt:62, heading:-35, roll:0,
+    mode:"SATELLITE",
+  });
+  map.addEventListener("gmp-error", e=>showGate("Map error: "+(e.detail?.message||"see console")));
+  document.getElementById("stage").prepend(map);
+  mapNote.remove();
+
+  WORK_ORDERS.forEach(addOverlays);
+  setHud(null);
+}
+
+function addOverlays(w){
+  const { Marker3DInteractiveElement, Polygon3DElement, Polyline3DElement } = lib;
+  const { PinElement } = markerLib;
+  const c = STATES[w.state];
+
+  // Pin sits above the mesh top so it clears stacks/roofs.
+  const marker = new Marker3DInteractiveElement({
+    position:{ lat:w.lat, lng:w.lng, altitude:18 },
+    altitudeMode:"RELATIVE_TO_MESH", extruded:true, label:w.id.slice(-3),
+    drawsWhenOccluded:true, sizePreserved:true,
+  });
+  const pin = new PinElement({ background:c.color, borderColor:"#0f1316", glyphColor:"#0f1316", scale:1.05 });
+  const tpl = document.createElement("template"); tpl.content.append(pin); marker.append(tpl);
+  marker.addEventListener("gmp-click", ()=>focusAsset(w.id, true));
+  map.append(marker);
+
+  // Extruded footprint: reads as "this asset, this tall".
+  const poly = new Polygon3DElement({
+    altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false,
+    fillColor:c.rgba+"0.22)", strokeColor:c.rgba+"0.95)", strokeWidth:2,
+  });
+  poly.outerCoordinates = squareAround(w.lat, w.lng, w.footprint/2, w.height);
+  map.append(poly);
+
+  // Drone scan path — only while in progress.
+  const path = new Polyline3DElement({
+    altitudeMode:"RELATIVE_TO_GROUND", strokeColor:"rgba(240,138,36,0.9)", strokeWidth:3, drawsOccludedSegments:true,
+  });
+  path.coordinates = orbitAround(w.lat, w.lng, w.footprint/2+14, w.scanAlt, 40);
+  if(w.state==="progress") map.append(path);
+
+  overlays[w.id] = { marker, pin, poly, path };
+}
+
+function updateMarker(w){
+  const o = overlays[w.id]; if(!o) return;
+  const c = STATES[w.state];
+  o.pin.background = c.color;
+  o.poly.fillColor = c.rgba+"0.22)"; o.poly.strokeColor = c.rgba+"0.95)";
+  const onMap = o.path.isConnected;
+  if(w.state==="progress" && !onMap) map.append(o.path);
+  if(w.state!=="progress" && onMap) o.path.remove();
+}
+
+function focusAsset(id, fly){
+  activeId = id; renderBoard();
+  const w = WORK_ORDERS.find(x=>x.id===id); if(!w) return;
+  setHud(w);
+  const el = document.querySelector(`.card[data-id="${id}"]`); el?.scrollIntoView({block:"nearest", behavior:"smooth"});
+  if(!map || !fly) return;
+  map.flyCameraTo({
+    endCamera:{ center:{ lat:w.lat, lng:w.lng, altitude:w.height*0.6 }, range: Math.max(260, w.footprint*4 + w.height*3), tilt:66, heading:-20 },
+    durationMillis:2200,
+  });
+}
+
+function setHud(w){
+  if(!w){
+    hud.innerHTML = `<div class="hud-card"><div class="eyebrow">Site</div><div class="title">ArcelorMittal Dofasco works</div><div class="meta">${SITE.lat.toFixed(4)}, ${SITE.lng.toFixed(4)} · ${WORK_ORDERS.length} work orders · click a card or a pin</div></div>`;
+    return;
+  }
+  hud.innerHTML = `<div class="hud-card" style="border-left-color:${STATES[w.state].color}">
+    <div class="eyebrow">${w.id} · ${STATES[w.state].label}</div>
+    <div class="title">${w.asset}</div>
+    <div class="meta">${w.lat.toFixed(5)}, ${w.lng.toFixed(5)} · struct ${w.height} m · scan alt ${w.scanAlt} m AGL</div>
+  </div>`;
+}
+
+document.getElementById("btnOverview").addEventListener("click", ()=>{
+  if(!map) return;
+  activeId=null; renderBoard(); setHud(null);
+  map.flyCameraTo({ endCamera:{ center:{lat:SITE.lat,lng:SITE.lng,altitude:0}, range:2600, tilt:62, heading:-35 }, durationMillis:1800 });
+  map.addEventListener("gmp-animationend", ()=>{
+    map.flyCameraAround({ camera:{ center:{lat:SITE.lat,lng:SITE.lng,altitude:0}, range:2600, tilt:62, heading:-35 }, durationMillis:30000, rounds:1 });
+  }, { once:true });
+});
+
+/* ---------- geometry helpers ---------- */
+function offset(lat, lng, dxM, dyM){
+  const dLat = dyM/111320, dLng = dxM/(111320*Math.cos(lat*Math.PI/180));
+  return { lat: lat+dLat, lng: lng+dLng };
+}
+function squareAround(lat, lng, r, alt){
+  return [[-r,-r],[r,-r],[r,r],[-r,r],[-r,-r]].map(([dx,dy])=>({ ...offset(lat,lng,dx,dy), altitude:alt }));
+}
+function orbitAround(lat, lng, r, alt, n){
+  const pts=[]; for(let i=0;i<=n;i++){ const a=i/n*2*Math.PI; pts.push({ ...offset(lat,lng,r*Math.cos(a),r*Math.sin(a)), altitude:alt }); } return pts;
+}
+
+renderBoard();
+initMap();
+</script>
+</body>
+</html>
