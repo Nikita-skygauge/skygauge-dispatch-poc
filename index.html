@@ -60,8 +60,14 @@ textarea.in{resize:vertical;min-height:60px}
 /* app */
 #app{flex:1;min-height:0;position:relative}
 .screen{position:absolute;inset:0}
-#view-map{display:grid;grid-template-columns:270px 1fr}
-#reg{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+#view-map{display:grid;grid-template-columns:1fr 280px}
+body.wo-view #view-map{grid-template-columns:1fr min(560px,100%)}
+body.wo-view #reg{display:none}
+body.wo-view #peek-slot{display:block!important}
+body.wo-view[data-tab="map"] #peek{box-shadow:none}
+body.wo-view[data-tab="map"] #pk-close{display:none}
+#mode .btn.teal{box-shadow:none}
+#reg{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #reg .title{padding:12px 14px 10px;border-bottom:1px solid var(--line)}
 #reg .meta{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin-top:8px;font-size:12px;color:var(--ink-2)}
 #reg .meta b{font-weight:500;color:var(--ink-3);font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;padding-top:2px}
@@ -247,19 +253,9 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 
 <div id="app" hidden>
   <div class="screen" id="view-map">
-    <aside id="reg">
-      <div class="title">
-        <div class="eyebrow">Site register</div>
-        <div class="meta"><b>Extent</b><span id="m-extent">…</span><b>Records</b><span id="m-records">…</span></div>
-      </div>
-      <div class="sub" role="tablist"><button aria-selected="true" data-sub="wo">Work orders</button><button aria-selected="false" data-sub="assets">Assets</button></div>
-      <div id="tree"></div>
-      <div class="foot">Orbit: drag · Pan: shift-drag · Zoom: wheel · Click a pin or an area to open it.<br>
-        <button class="link" id="new-wo-map">＋ New work order</button> · <button class="link" id="new-asset">＋ Asset</button> · <button class="link" id="edit-site">Site boundary</button></div>
-    </aside>
     <div id="canvas-wrap">
-      <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a work area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Finish</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button></div>
-      <div id="hud"><button class="btn" data-view="site" title="Recommended zoom-out">Site</button><button class="btn" data-view="north">From harbour</button><button class="btn" data-view="plan">Plan</button><button class="btn" id="b-orbit">Orbit</button></div>
+      <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a work area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Finish</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
+      <div id="hud"><button class="btn" data-view="site" title="Recommended framing: the whole site">Site</button><button class="btn" data-view="north">From harbour</button><button class="btn" data-view="plan">Plan</button><button class="btn" id="b-orbit">Orbit</button></div>
       <div id="legend"></div>
       <div id="loading"><div>Loading photorealistic 3D…</div><div class="bar"><i></i></div></div>
       <div id="mapgate" hidden><div class="box">
@@ -271,6 +267,17 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
         <div class="err" id="keyErr"></div>
       </div></div>
     </div>
+    <aside id="reg">
+      <div class="title">
+        <div class="eyebrow">Site register</div>
+        <div class="meta"><b>Extent</b><span id="m-extent">…</span><b>Records</b><span id="m-records">…</span></div>
+      </div>
+      <div class="sub" role="tablist"><button aria-selected="true" data-sub="wo">Work orders</button><button aria-selected="false" data-sub="assets">Assets</button></div>
+      <div id="tree"></div>
+      <div class="foot">Standard Google 3D controls: drag to pan · right-drag or Ctrl-drag to rotate and tilt · wheel or pinch to zoom.<br>
+        <button class="link" id="new-wo-map">＋ New work order</button> · <button class="link" id="new-asset">＋ Asset</button> · <button class="link" id="edit-site">Site boundary</button></div>
+    </aside>
+    <div id="peek-slot" hidden></div>
   </div>
 
   <div class="screen" id="view-wo" hidden>
@@ -591,7 +598,7 @@ async function setPoints(id,points,height){
 /* Cosmetic Save button (V-save): writes are automatic; the button appears on change, reads Saved ✓, then fades. */
 let saveT=null;
 function markSaved(){ const b=$("#pk-save"); if(!b) return; clearTimeout(saveT); b.hidden=false; b.textContent="Save"; b.classList.add("pend"); saveT=setTimeout(()=>{ b.textContent="Saved ✓"; b.classList.remove("pend"); saveT=setTimeout(()=>{ b.hidden=true; },2200); },900); }
-async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id) closePeek(); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
+async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
 async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m.remove(); o.area?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
 function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); }
@@ -634,7 +641,7 @@ function openPop(anchor, html, opts={}){
   return el;
 }
 document.addEventListener("pointerdown",e=>{ if(POP&&!POP.contains(e.target)) closePop(); },true);
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(POP){ closePop(); e.stopPropagation(); return; } if($("#cam")){ closeCamera(); return; } if(VW){ closeViewer(); return; } if(V.draw){ $("#mode-exit").click(); return; } if(S.open) closePeek(); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(POP){ closePop(); e.stopPropagation(); return; } if($("#cam")){ closeCamera(); return; } if(VW){ closeViewer(); return; } if(V.draw){ $("#mode-exit").click(); return; } if(S.open&&!S.woView) closePeek(); } });
 
 /* =====================================================================
    VALUE RENDERERS (record page, table cell, board card)
@@ -927,7 +934,7 @@ function renderRecord(){
   $("#add-prop").onclick=e=>propertyCreator(e.currentTarget,p=>{ showEmpty=true; renderRecord(); const el=document.querySelector(`#pbody .pv[data-edit="${p.id}"]`); if(el) startEdit(p,w,el); });
   $("#act-h").onclick=()=>{ showAct=!showAct; renderRecord(); };
   $("#l-add").onclick=()=>addPoints(w.id);
-  $("#l-fly").onclick=()=>{ setTab("map"); flyWO(w); };
+  $("#l-fly").onclick=()=>enterWOView(w.id);
   $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(1,+e.target.value||10)));
   $("#l-alt")?.addEventListener("change",e=>{ const p=pts(w).slice(); p[0]={...p[0],alt:+e.target.value||0}; setPoints(w.id,p); });
   $$("#pbody [data-mv]").forEach(b=>b.onclick=()=>movePoint(w.id,+b.dataset.mv));
@@ -1029,24 +1036,25 @@ function renderTree(){
     $("#tree").innerHTML=areas.map(ar=>`<div class="eyebrow" style="padding:8px 8px 2px">${P(ar)}</div>${as.filter(a=>(a.area||"Other")===ar).map(a=>{ const n=live().filter(w=>(w.values?.asset||[]).includes(a.tag)&&isOpen(w)).length; return `<div class="it" data-asset="${P(a.tag)}"><span class="tag">${P(a.tag)}</span><span class="n" title="${P(a.name)}">${P(a.name)}</span><span class="c">${n?n+" open":""}</span></div>`; }).join("")}`).join("")||`<div class="kempty">No assets</div>`;
   }
 }
-$("#tree").addEventListener("click",e=>{ const it=e.target.closest(".it"); if(!it) return; if(it.dataset.wo) openWO(it.dataset.wo,true); else if(it.dataset.asset) assetEditor(asset(it.dataset.asset),it); });
+$("#tree").addEventListener("click",e=>{ const it=e.target.closest(".it"); if(!it) return; if(it.dataset.wo) enterWOView(it.dataset.wo); else if(it.dataset.asset) assetEditor(asset(it.dataset.asset),it); });
 
 /* ---------- tabs, search, user menu, admin, export ---------- */
-function setTab(t){ S.tab=t; $$("#bar [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t)); $("#view-map").hidden=t!=="map"; $("#view-wo").hidden=t!=="wo"; renderAll(); }
+function setTab(t){ S.tab=t; document.body.dataset.tab=t; $$("#bar [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t)); $("#view-map").hidden=t!=="map"; $("#view-wo").hidden=t!=="wo"; renderAll(); }
 function wireUI(){
   $$("#bar [data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
   $$("#reg .sub button").forEach(b=>b.onclick=()=>{ S.sub=b.dataset.sub; $$("#reg .sub button").forEach(x=>x.setAttribute("aria-selected",x===b)); renderTree(); });
   $$("#viewsw button").forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; saveView(); renderViews(); });
   $("#q").oninput=e=>{ S.q=e.target.value; renderAll(); };
   $("#b-new").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); };
-  $("#new-wo-map").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); if(map) addPoints(id); };
+  $("#new-wo-map").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; enterWOView(id); if(map) addPoints(id); };
   $("#b-props").onclick=e=>propsToggle(e.currentTarget);
   $("#b-export").onclick=exportJSON;
-  $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w){ setTab("map"); flyWO(w); } };
+  $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w) enterWOView(w.id); };
+  $("#site-view").onclick=exitWOView;
   $("#userbtn").onclick=e=>userMenu(e.currentTarget);
   $("#new-asset").onclick=e=>assetEditor(null,e.currentTarget);
   document.addEventListener("pointerdown",e=>{ // click outside the peek closes it (V11) — not on popovers, map or toolbar buttons
-    if(!S.open) return; const pk=$("#peek"); if(pk.contains(e.target)||e.target.closest(".pop,.kcard,.it,.tbl,#bar,#mode,#hud,#legend,gmp-map-3d,.toast")) return; closePeek(); },true);
+    if(!S.open||S.woView) return; const pk=$("#peek"); if(pk.contains(e.target)||e.target.closest(".pop,.kcard,.it,.tbl,#bar,#mode,#hud,#legend,gmp-map-3d,.toast")) return; closePeek(); },true);
   window.addEventListener("keydown",e=>{ if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="k"){ e.preventDefault(); $("#q").focus(); } });
   $("#keySave").onclick=async()=>{ const k=$("#keyInput").value.trim(); if(!/^AIza[0-9A-Za-z_\-]{20,}$/.test(k)){ $("#keyErr").textContent="That doesn't look like a Google Maps key (they start with AIza)."; return; } if(S.admin){ try{ await DB.set("config/maps",{ key:k, updated:now(), updatedBy:S.user.email }); }catch(e){ $("#keyErr").textContent="Could not save the key: "+(e.message||e); return; } } try{ localStorage.setItem(LSK.key,k); }catch{} location.reload(); };
   $("#keyInput").onkeydown=e=>{ if(e.key==="Enter") $("#keySave").click(); };
@@ -1106,14 +1114,14 @@ async function initMap(){
   $("#mapgate").hidden=true; $("#loading").hidden=false;
   try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); }catch(e){ showMapGate("Could not load Google Maps: "+(e.message||e)); return; }
   const cam=siteCam(), g=siteGeom();
-  map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", ...cameraLimits(), minAltitude:15 });   // limits in the constructor or the engine idles
+  map=new lib.Map3DElement({ ...cam, mode:"SATELLITE" });   // no bounds / altitude clamps — stock Google 3D navigation; the Site button is the recommended framing
   map.addEventListener("gmp-error",e=>showMapGate("Map error: "+(e.detail?.message||"see console")));
-  map.addEventListener("gmp-click",onMapClick);
+  map.addEventListener("gmp-click",onMapClick); installLock();
   $("#canvas-wrap").prepend(map); $("#loading").hidden=true;
   $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`;
   requestAnimationFrame(()=>{ drawSite(); syncAssetOverlays(); syncOverlays(); syncPhotoOverlays(); });
 }
-function applyCameraLimits(){ if(!map) return; const L=cameraLimits(); map.bounds=L.bounds; map.maxAltitude=L.maxAltitude; const c=siteCam(); map.center=c.center; map.range=c.range; map.tilt=c.tilt; map.heading=c.heading; const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
+function applyCameraLimits(){ if(!map) return; const c=siteCam(); map.flyCameraTo({ endCamera:c, durationMillis:1200 }); const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
 function drawSite(){ if(!map) return; OV.site?.remove(); const B=BOUNDARY(); const line=new lib.Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true }); line.path=[...B,B[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(line); OV.site=line; }
 function syncAssetOverlays(){ if(!map) return; Object.keys(OV.asset).forEach(t=>{ if(!asset(t)){ OV.asset[t].poly.remove(); OV.asset[t].tag.remove(); delete OV.asset[t]; } }); S.assets.forEach(a=>{ const o=OV.asset[a.tag]; if(o){ if(o.lat!==a.lat||o.lng!==a.lng||o.h!==a.h||o.fp!==a.fp){ o.poly.remove(); o.tag.remove(); delete OV.asset[a.tag]; addAssetOverlay(a); } } else addAssetOverlay(a); }); }
 function addAssetOverlay(a){
@@ -1130,32 +1138,32 @@ function addWOOverlay(w){
   const o={ sig:JSON.stringify(w.location||{}), m:null, pin:null, area:null, line:null };
   const c=woColor(w); const a=locAnchor(w); const h=locHeight(w);
   o.m=new lib.Marker3DInteractiveElement({ position:{lat:a.lat,lng:a.lng,altitude:P.length===1?(a.alt||0):P.length===2?2:h}, altitudeMode:"RELATIVE_TO_GROUND", extruded:P.length===1, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
-  o.pin=pinTemplate(c,1.0); o.m.append(o.pin.tpl); o.m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); openWO(w.id); }); map.append(o.m);
+  o.pin=pinTemplate(c,1.0); o.m.append(o.pin.tpl); o.m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); enterWOView(w.id); }); map.append(o.m);
   if(P.length===2){ o.line=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_GROUND", strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:5, drawsOccludedSegments:true }); o.line.path=P.map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(o.line); }
-  if(P.length>=3){ o.area=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:h})); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; openWO(w.id); }); map.append(o.area); }
+  if(P.length>=3){ o.area=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:h})); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; enterWOView(w.id); }); map.append(o.area); }
   OV.wo[w.id]=o; applyLegendTo(w);
 }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
-function fly(cam,ms=1800){ if(!map) return; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); }
+function fly(cam,ms=1800){ if(!map) return; flying=true; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); map.addEventListener("gmp-animationend",()=>{ flying=false; },{once:true}); }
 function flyAsset(a){ fly({ center:{lat:a.lat,lng:a.lng,altitude:(a.ground??GROUND_FALLBACK)+(a.h||10)*0.5}, range:Math.max(220,(a.fp||10)*4+(a.h||10)*3), tilt:66, heading:-20 },2000); }
 const GROUND_FALLBACK=80; // m above sea level at the Dofasco works when a pin has no recorded ground elevation
 function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
-  const a=locAnchor(w); const ground=(a.ground??GROUND_FALLBACK), alt=ground+(a.alt||0)+(P.length>=3?locHeight(w)/2:0);
-  const r=P.length>=2?Math.max(160,extentM(bbox(P)).ns*2.5,extentM(bbox(P)).ew*2.5):160;
-  const cam={ center:{lat:a.lat,lng:a.lng,altitude:alt}, range:r, tilt:62, heading:-30 };
-  map.flyCameraTo({ endCamera:cam, durationMillis:1800 });
-  // pivot slowly around the work location once we arrive; any drag or wheel cancels it
-  map.addEventListener("gmp-animationend",()=>{ if(S.open===w.id) map.flyCameraAround({ camera:cam, durationMillis:60000, rounds:1 }); },{once:true});
+  const a=locAnchor(w); const ground=(a.ground??GROUND_FALLBACK), alt=ground+(a.alt||0)+(P.length>=3?locHeight(w)/2:P.length===1?6:2);
+  const ext=P.length>=2?Math.max(extentM(bbox(P)).ns,extentM(bbox(P)).ew):0;
+  const r=P.length===1?110:Math.max(100,ext*1.8);
+  const cam={ center:{lat:a.lat,lng:a.lng,altitude:alt}, range:r, tilt:62, heading:map.heading??-30 };
+  flying=true; LOCK=null; map.flyCameraTo({ endCamera:cam, durationMillis:1600 });
+  map.addEventListener("gmp-animationend",()=>{ flying=false; if(S.woView&&S.open===w.id) lockTo(cam); },{once:true});
 }
 $$("#hud [data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view, g=siteGeom(); if(v==="site") fly(siteCam()); if(v==="north") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*0.95, tilt:60, heading:170 }); if(v==="plan") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*1.05, tilt:0, heading:0 }); });
 $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 }),{once:true}); };
 
 /* ---------- mode bar, placing and drawing ---------- */
-function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
-function resetMode(){ setMode("","Site view","Click a pin or a work area to open it.",false); }
+function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
+function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view","Click a pin or a work area to open it.",false); }
 $("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round(e.position.altitude||0) };
@@ -1164,9 +1172,10 @@ function onMapClick(e){
 }
 /* ---------- location points: add (continuous), move, remove, select ---------- */
 function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } setTab("map"); clearPointHandles();
-  startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:1, onDone:p=>{ setPoints(id,p); syncPointHandles(); }, onCancel:()=>syncPointHandles() }); }
+  startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:1, onDone:p=>{ setPoints(id,p); syncPointHandles(); relock(); }, onCancel:()=>{ syncPointHandles(); relock(); } }); }
+function relock(){ if(S.woView&&S.open&&map){ const w=W(S.open); if(w&&pts(w).length) flyWO(w); } }
 function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } setTab("map"); selPt=i; syncPointHandles();
-  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); } }; map.classList.add("placing"); setMode("place",`Point ${i+1}`,`Click the model where point <b>${i+1}</b> should be.`,true); }
+  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); setMode("place",`Point ${i+1}`,`Click the model where point <b>${i+1}</b> should be.`,true); }
 function selectPoint(i){ selPt=selPt===i?null:i; syncPointHandles(); if(S.open) renderRecord(); const w=W(S.open); if(selPt!=null&&w){ const p=pts(w)[selPt]; if(p&&map){ fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } } }
 /* numbered handles for the open record's points; click → select, then Move / Remove in the mode bar */
 const PTH=[];
@@ -1213,6 +1222,16 @@ function assetEditor(a,anchor,opts={}){
   el.querySelector("#a-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } const draft={ ...read(), pos }; closePop(); setTab("map"); V.placing={ onPlace:async p=>{ if(isNew){ const d=draft; if(!d.tag||!d.name){ toast("Tag and name are required — reopen ＋ Asset.",true); return; } if(asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } await DB.set(AS_COL+"/"+d.tag,{ tag:d.tag,name:d.name,area:d.area,h:d.h,fp:d.fp, lat:p.lat, lng:p.lng, ground:p.ground }); onCreate?.(d.tag); toast(`Asset ${d.tag} created.`); } else { await DB.update(AS_COL+"/"+a.tag,{ lat:p.lat, lng:p.lng, ground:p.ground }); toast(`Asset ${a.tag} moved.`); } } }; map.classList.add("placing"); setMode("place","Place asset",`Click the model where <b>${P(draft.tag||"the asset")}</b> stands.`,true); };
   el.querySelector("#a-fly")?.addEventListener("click",()=>{ setTab("map"); flyAsset(a); });
   el.querySelector("#a-del")?.addEventListener("click",async()=>{ if(refs){ toast(`${a.tag} is referenced by ${refs} work order${refs===1?"":"s"}; remove those references first.`,true); return; } if(!confirm(`Delete asset ${a.tag}?`)) return; await DB.del(AS_COL+"/"+a.tag); closePop(); });
+}
+
+/* ---------- Work order view: register hides, record docks right, camera pivots around the location only ---------- */
+let LOCK=null, flying=false;
+function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); if(map){ flyWO(w); } woMode(); }
+function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); if(map) fly(siteCam(),1500); }
+function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",`<b>${w.id}</b> · rotate and zoom around it`,false); $("#site-view").hidden=false; }
+function lockTo(cam){ LOCK={ lat:cam.center.lat, lng:cam.center.lng, altitude:cam.center.altitude }; }
+function installLock(){
+  map.addEventListener("gmp-centerchange",()=>{ if(!LOCK||flying||V.draw||V.placing) return; const c=map.center; if(!c) return; if(Math.abs(c.lat-LOCK.lat)>1e-7||Math.abs(c.lng-LOCK.lng)>1e-7||Math.abs((c.altitude||0)-LOCK.altitude)>0.3) map.center=LOCK; });
 }
 
 /* =====================================================================
@@ -1418,7 +1437,7 @@ function previewPose(p,e){ const o=PHOV[p.id]; if(!o||!map) return; if(!o.wedge)
 function clearPhotoOverlays(){ Object.values(PHOV).forEach(o=>{ o.m.remove(); o.wedge?.remove(); }); for(const k in PHOV) delete PHOV[k]; }
 function highlightPhoto(pid){ Object.entries(PHOV).forEach(([id,o])=>{ const hl=id===pid; if(hl!==o.hl){ o.hl=hl; o.sig=""; } }); $$("#gal .th").forEach(t=>t.classList.toggle("hl",t.dataset.pid===pid)); syncPhotoOverlays(); }
 function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGround(p); const h=e.heading??0; const back=offset(e.lat,e.lng,-Math.sin(h*Math.PI/180)*6,-Math.cos(h*Math.PI/180)*6);
-  map.flyCameraTo({ endCamera:{ center:{ lat:back.lat, lng:back.lng, altitude:g+EYE_H+4 }, range:45, tilt:72, heading:h }, durationMillis:1600 }); }
+  LOCK=null; fly({ center:{ lat:back.lat, lng:back.lng, altitude:g+EYE_H+4 }, range:45, tilt:72, heading:h },1600); }
 
 boot();
 </script>
