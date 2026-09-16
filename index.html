@@ -225,11 +225,48 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 .dom{display:inline-block;font-family:var(--mono);font-size:11.5px;background:var(--panel-2);border:1px solid var(--line);border-radius:5px;padding:1px 6px;margin:2px}
 .admin .dom .x{cursor:pointer;margin-left:6px;color:var(--crit)}
 
+.handle{display:none}
 @media (max-width:860px){
-  #bar{padding:6px 10px;gap:8px} #bar h1 span{display:none} #search{margin-left:0;flex:1 1 100%} #search input{width:100%;max-width:none}
-  #view-map{display:block} #reg{display:none} #canvas-wrap{position:absolute;inset:0}
-  #peek{width:100%} .prop{grid-template-columns:1fr} .prop .pn{padding-bottom:0} .kcol{flex:0 0 86vw} #views{padding:10px}
-  .btn{min-height:40px}
+  :root{--sheet-peek:132px;--sheet-half:52vh}
+  html{-webkit-text-size-adjust:100%} input,textarea,select{font-size:16px!important}
+  .btn,.kadd,.mi,.ptrow,.it{min-height:44px} .btn.sm{min-height:40px;padding:8px 12px;font-size:13px}
+  #bar{padding:6px 10px;gap:8px;flex-wrap:nowrap} #bar h1{display:none} .tabs button{padding:8px 12px}
+  #search{display:none;order:9;flex:1 1 100%;margin:0} body.search-open #search{display:block} body.search-open #bar{flex-wrap:wrap} #search input{width:100%;max-width:none}
+  #search-toggle{display:inline-block!important;margin-left:auto;padding:6px 10px} #userbtn span:last-child{display:none} #userbtn{padding:2px}
+  #view-map{display:block} #canvas-wrap{position:absolute;inset:0}
+  /* register = bottom sheet */
+  #reg{display:flex;position:absolute;left:0;right:0;bottom:0;height:64px;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.25);z-index:9;transition:height .22s ease;overflow:hidden}
+  #reg.open{height:62vh} #reg .title,#reg .sub,#tree,#reg .foot{display:none} #reg.open .title,#reg.open .sub,#reg.open #tree{display:block} #reg.open .sub{display:flex} #reg.open .foot{display:block}
+  #reg .title{padding:6px 14px 8px}
+  .handle{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;flex:none;font-size:13px;color:var(--ink-2);min-height:48px}
+  .handle i{width:38px;height:4px;border-radius:2px;background:var(--line);position:absolute;left:50%;top:8px;transform:translateX(-50%)}
+  .handle b{margin-left:auto;color:var(--ink-3);font-weight:500} #reg.open .handle b{transform:rotate(180deg)}
+  #reg-sum{padding-top:8px} #reg.open #reg-sum{opacity:.6}
+  body.wo-view #reg{display:none}
+  /* record = bottom sheet with three heights */
+  #peek{width:100%;top:auto;left:0;right:0;bottom:0;height:var(--sheet-half);border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;transform:translateY(102%);transition:transform .22s ease,height .22s ease;box-shadow:0 -8px 24px rgba(0,0,0,.3)}
+  #peek.on{transform:none} #peek[data-sheet="peek"]{height:var(--sheet-peek)} #peek[data-sheet="full"]{height:calc(100% - 0px);border-radius:0}
+  #peek .handle{padding:6px 14px 0;min-height:18px} #peek .ph{padding:6px 10px;flex-wrap:wrap;gap:6px} #peek .ph .id{width:100%;font-size:11px}
+  #pk-size{display:inline-block!important} #peek[data-sheet="full"] #pk-size{transform:rotate(180deg)}
+  #pbody{padding:10px 14px 60px}
+  body.wo-view[data-tab="map"] #peek{box-shadow:0 -8px 24px rgba(0,0,0,.3)} #peek-slot{display:none!important}
+  .prop{grid-template-columns:1fr} .prop .pn{padding-bottom:0} .ptitle{font-size:20px}
+  /* map chrome */
+  #mode{left:8px;right:8px;top:8px;max-width:none;padding:8px 10px;font-size:12.5px;gap:8px} #mode .mode-txt{flex:1 1 100%}
+  #draw-acts{position:fixed;left:12px;right:12px;bottom:calc(var(--sheet-peek) + 12px);z-index:40;display:flex!important;gap:10px;justify-content:stretch}
+  #draw-acts[hidden]{display:none!important} #draw-acts .btn{flex:1;min-height:52px;font-size:15px;font-weight:600;box-shadow:var(--shadow)}
+  body:not(.wo-view) #draw-acts{bottom:76px}
+  #hud{left:auto;right:8px;top:auto;bottom:calc(64px + 12px);flex-direction:column;gap:6px} body.wo-view #hud{display:none} #hud [data-view="north"],#hud [data-view="plan"]{display:none}
+  #legend{display:none} #orbit{bottom:var(--sheet-half)} #peek[data-sheet="peek"] ~ #orbit{bottom:var(--sheet-peek)}
+  /* menus as bottom sheets */
+  .pop{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;max-width:none;width:100%;max-height:70vh;border-radius:14px 14px 0 0;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.4)}
+  .pop .mi{min-height:44px;font-size:15px} .pop .pin{font-size:16px;padding:10px 8px}
+  /* work orders tab */
+  .toolbar{padding:8px 10px;gap:6px} #views{padding:10px;overflow-x:auto} .kanban{scroll-snap-type:x mandatory;gap:10px} .kcol{flex:0 0 88vw;scroll-snap-align:start;max-height:calc(100vh - 170px)}
+  .tbl th,.tbl td{max-width:200px} .thumbs{grid-template-columns:repeat(3,1fr)}
+  .locbox .acts{flex-direction:column;align-items:stretch} .locbox .acts .btn{width:100%} .locbox .acts label{justify-content:space-between} #l-fly{margin-left:0!important}
+  .ptrow{padding:6px 8px} .ptrow .btn{min-height:40px}
+  .toast{bottom:calc(var(--sheet-peek) + 80px);max-width:92vw;text-align:center}
 }
 @media (prefers-reduced-motion: reduce){ #loading .bar i{animation:none;width:100%} #peek{transition:none} }
 </style>
@@ -251,6 +288,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
     <button role="tab" aria-selected="false" data-tab="wo">Work Orders<b id="tab-open"></b></button>
   </div>
   <div id="search"><input id="q" type="search" placeholder="Search work orders…" autocomplete="off" aria-label="Search"></div>
+  <button class="btn" id="search-toggle" aria-label="Search" hidden>🔍</button>
   <button id="userbtn" title="Account"><span class="avatar" id="uav">?</span><span id="uname">…</span></button>
 </div>
 <div id="offline" hidden>Offline — changes will sync when the connection returns</div>
@@ -258,7 +296,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 <div id="app" hidden>
   <div class="screen" id="view-map">
     <div id="canvas-wrap">
-      <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a work area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Finish</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
+      <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a work area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Done ✓</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
       <div id="hud"><button class="btn" data-view="site" title="Recommended framing: the whole site">Site</button><button class="btn" data-view="north">From harbour</button><button class="btn" data-view="plan">Plan</button><button class="btn" id="b-orbit">Orbit</button></div>
       <div id="orbit" hidden title="Drag to rotate · wheel or pinch to zoom"></div>
       <div id="legend"></div>
@@ -273,6 +311,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
       </div></div>
     </div>
     <aside id="reg">
+      <div class="handle" id="reg-handle"><i></i><span id="reg-sum"></span><b>▴</b></div>
       <div class="title">
         <div class="eyebrow">Site register</div>
         <div class="meta"><b>Extent</b><span id="m-extent">…</span><b>Records</b><span id="m-records">…</span></div>
@@ -298,7 +337,8 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   </div>
 
   <aside id="peek" aria-label="Work order">
-    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" title="Changes save automatically">Saved ✓</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
+    <div class="handle" id="pk-handle"><i></i></div>
+    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" title="Changes save automatically">Saved ✓</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-size" hidden aria-label="Expand or collapse">▴</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
     <div id="pbody"></div>
   </aside>
 </div>
@@ -313,19 +353,6 @@ const FIREBASE = { apiKey:"AIzaSyC6qv0L6pY8AwONFBCotv8X0Lrp9dX93vw", authDomain:
 const ADMIN_EMAIL = "nikita@skygauge.co";
 const DEFAULT_ALLOWLIST = ["arcelormittal.com","acuren.com","teaminc.com","applus.com","skygauge.co"];
 const DEFAULT_BOUNDARY = [ { lat:43.280718, lng:-79.804060 }, { lat:43.278935, lng:-79.796119 }, { lat:43.259698, lng:-79.803403 }, { lat:43.261017, lng:-79.812128 } ];
-const SEED_ASSETS = [
-  { tag:"BF-4",  name:"No. 4 Blast Furnace — stove stack",        area:"Ironmaking", lat:43.2735, lng:-79.8028, h:82, fp:12 },
-  { tag:"BF-2",  name:"No. 2 Blast Furnace — uptakes & downcomer", area:"Ironmaking", lat:43.2722, lng:-79.804,  h:70, fp:22 },
-  { tag:"GH-1",  name:"BF gas holder",                            area:"Ironmaking", lat:43.275,  lng:-79.8035, h:48, fp:36 },
-  { tag:"KOBM",  name:"KOBM baghouse stack",                      area:"Steelmaking", lat:43.2705, lng:-79.8022, h:74, fp:10 },
-  { tag:"DS-1",  name:"Desulphurization baghouse stack",          area:"Steelmaking", lat:43.2695, lng:-79.8038, h:55, fp:8 },
-  { tag:"HSM",   name:"Hot Strip Mill — roof & monitor vents",    area:"Rolling & Finishing", lat:43.2665, lng:-79.8035, h:28, fp:90 },
-  { tag:"GL-4",  name:"No. 4 Galvanizing line — furnace stack",   area:"Rolling & Finishing", lat:43.265,  lng:-79.8042, h:38, fp:6 },
-  { tag:"BH-1",  name:"Boiler house stack — Utilities",           area:"Utilities", lat:43.268,  lng:-79.8018, h:65, fp:9 },
-  { tag:"T-102", name:"Fuel oil tank T-102",                      area:"Utilities", lat:43.2638, lng:-79.804,  h:16, fp:40 },
-  { tag:"WW-3",  name:"Wastewater clarifier No. 3",               area:"Utilities", lat:43.2762, lng:-79.802,  h:6,  fp:34 },
-  { tag:"DRI",   name:"DRI/EAF project — structural steel",       area:"Projects", lat:43.2628, lng:-79.8046, h:40, fp:60 },
-];
 /* Notion's 10-colour palette → pill background / map colour */
 const PALETTE = {
   default:{bg:"#E3E5EC",fg:"#2B2F3C",map:"#6B7295"}, gray:{bg:"#D9DCE3",fg:"#2B2F3C",map:"#8B93A8"}, brown:{bg:"#E9D8CF",fg:"#4A2E20",map:"#A0725B"},
@@ -524,7 +551,6 @@ function startApp(){
     purgeTrash(); syncOverlays(); renderAll();
   }));
   S.unsub.push(DB.watchCol(AS_COL, rows=>{
-    if(!rows.length && !S.assetsSeeded){ S.assetsSeeded=true; SEED_ASSETS.forEach(a=>DB.set(AS_COL+"/"+a.tag,a).catch(console.error)); return; }
     S.assets=rows.sort((a,b)=>a.tag.localeCompare(b.tag)); syncAssetOverlays(); renderAll();
   }));
   S.unsub.push(DB.watchCol("workspace/main/members", rows=>{ S.members=rows.sort((a,b)=>a.name.localeCompare(b.name)); }));
@@ -895,7 +921,7 @@ let actUnsub=null, ACT=[], showEmpty=false, showAct=false, selPt=null;
 function openWO(id,fly){
   const w=W(id); if(!w) return;
   if(S.open!==id){ showEmpty=false; showAct=false; actUnsub?.(); ACT=[]; actUnsub=DB.watchCol(WO_COL+"/"+id+"/activity",rows=>{ ACT=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id) renderActivity(); }); }
-  if(S.open!==id) selPt=null; S.open=id; watchPhotos(id); $("#peek").classList.add("on"); renderRecord(); highlightCard(id); syncPointHandles();
+  if(S.open!==id){ selPt=null; if(isMobile()) setSheet("half"); } S.open=id; watchPhotos(id); $("#peek").classList.add("on"); $("#reg").classList.remove("open"); renderRecord(); highlightCard(id); syncPointHandles();
   if(fly&&map) flyWO(w);
 }
 function closePeek(){ closeViewer(); stopPhotos(); clearPointHandles(); S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
@@ -916,7 +942,7 @@ function renderRecord(){
       <div class="addprop" id="add-prop">＋ Add a property</div>
     </div>
     <section class="ps"><h3 style="cursor:default">Location <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${P({none:"— click the model to place points",pin:"Pin",line:"Line",area:"Area · "+P0.length+" corners"}[locKind(P0.length)])}</span></h3><div class="locbox">
-      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${selPt===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">One point makes a pin, two make a line, three or more make an area. Points can be moved or removed at any time.</div>`}
+      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${selPt===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">One point makes a pin, two make a line, three or more make an area.${isMobile()?" Tap ＋ Add point, then tap the model; the panel drops out of the way while you place.":" Points can be moved or removed at any time."}</div>`}
       <div class="acts"><button class="btn sm ${P0.length?"":"primary"}" id="l-add">＋ Add point${P0.length?"s":""}</button>
       ${P0.length>=3?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="1" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}
       ${P0.length===1?`<label class="hint" style="display:flex;align-items:center;gap:4px">Pin alt <input class="in mono" id="l-alt" type="number" value="${Math.round(P0[0].alt||0)}" style="width:64px;padding:2px 6px"> m</label>`:""}
@@ -933,7 +959,7 @@ function renderRecord(){
   t.onblur=()=>setTitle(w.id,t.value.trim());
   if(w._focusTitle){ delete w._focusTitle; t.focus(); }
   $("#pbody").querySelector("[data-status]").onclick=e=>statusMenu(w,e.currentTarget);
-  $$("#pbody .pv[data-edit]").forEach(el=>el.onclick=e=>{ if(e.target.closest("a")) return; const a=e.target.closest("[data-asset]"); if(a){ const as=asset(a.dataset.asset); if(as){ setTab("map"); flyAsset(as); } return; } startEdit(prop(el.dataset.edit),w,el); });
+  $$("#pbody .pv[data-edit]").forEach(el=>el.onclick=e=>{ if(e.target.closest("a")) return; const a=e.target.closest("[data-asset]"); if(a){ const as=asset(a.dataset.asset); if(as) assetEditor(as,a); return; } startEdit(prop(el.dataset.edit),w,el); });
   $$("#pbody .pn[title]").forEach(el=>el.onclick=()=>propertyMenu(prop(el.closest(".prop").dataset.pid),el));
   $("#toggle-empty")?.addEventListener("click",()=>{ showEmpty=!showEmpty; renderRecord(); });
   $("#add-prop").onclick=e=>propertyCreator(e.currentTarget,p=>{ showEmpty=true; renderRecord(); const el=document.querySelector(`#pbody .pv[data-edit="${p.id}"]`); if(el) startEdit(p,w,el); });
@@ -967,7 +993,7 @@ function renderAll(){
   if(!S.schema) return;
   const open=live().filter(isOpen); $("#tab-open").textContent=open.length||"";
   $("#m-records").textContent=`${S.assets.length} assets · ${live().length} work orders · ${open.length} open`;
-  renderTree(); renderLegend();
+  renderTree(); renderLegend(); regSummary();
   if(S.tab==="wo") renderViews();
   if(S.open) renderRecord();
 }
@@ -1045,7 +1071,15 @@ $("#tree").addEventListener("click",e=>{ const it=e.target.closest(".it"); if(!i
 
 /* ---------- tabs, search, user menu, admin, export ---------- */
 function setTab(t){ S.tab=t; document.body.dataset.tab=t; $$("#bar [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t)); $("#view-map").hidden=t!=="map"; $("#view-wo").hidden=t!=="wo"; renderAll(); }
+const isMobile=()=>matchMedia("(max-width:860px)").matches;
+function setSheet(state){ const pk=$("#peek"); pk.dataset.sheet=state; if(state==="full") pk.scrollTop=0; }
+function toggleSheet(){ const pk=$("#peek"); const s=pk.dataset.sheet||"half"; setSheet(s==="full"?"half":s==="half"?"full":"half"); }
+function regSummary(){ const open=live().filter(isOpen).length; const el=$("#reg-sum"); if(el) el.textContent=`${live().length} work orders · ${open} open · ${S.assets.length} assets`; }
 function wireUI(){
+  $("#reg-handle").onclick=()=>$("#reg").classList.toggle("open");
+  $("#pk-handle").onclick=toggleSheet; $("#pk-size").onclick=toggleSheet;
+  $("#search-toggle").onclick=()=>{ document.body.classList.toggle("search-open"); if(document.body.classList.contains("search-open")) $("#q").focus(); };
+  document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&document.body.classList.contains("search-open")&&!S.q){ document.body.classList.remove("search-open"); } });
   $$("#bar [data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
   $$("#reg .sub button").forEach(b=>b.onclick=()=>{ S.sub=b.dataset.sub; $$("#reg .sub button").forEach(x=>x.setAttribute("aria-selected",x===b)); renderTree(); });
   $$("#viewsw button").forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; saveView(); renderViews(); });
@@ -1125,17 +1159,11 @@ async function initMap(){
   map.addEventListener("gmp-click",onMapClick); installLock();
   $("#canvas-wrap").prepend(map); $("#loading").hidden=true;
   $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`;
-  requestAnimationFrame(()=>{ drawSite(); syncAssetOverlays(); syncOverlays(); syncPhotoOverlays(); });
+  requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); });
 }
 function applyCameraLimits(){ if(!map) return; const c=siteCam(); map.flyCameraTo({ endCamera:c, durationMillis:1200 }); const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
 function drawSite(){ if(!map) return; OV.site?.remove(); const B=BOUNDARY(); const line=new lib.Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true }); line.path=[...B,B[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(line); OV.site=line; }
-function syncAssetOverlays(){ if(!map) return; Object.keys(OV.asset).forEach(t=>{ if(!asset(t)){ OV.asset[t].poly.remove(); OV.asset[t].tag.remove(); delete OV.asset[t]; } }); S.assets.forEach(a=>{ const o=OV.asset[a.tag]; if(o){ if(o.lat!==a.lat||o.lng!==a.lng||o.h!==a.h||o.fp!==a.fp){ o.poly.remove(); o.tag.remove(); delete OV.asset[a.tag]; addAssetOverlay(a); } } else addAssetOverlay(a); }); }
-function addAssetOverlay(a){
-  const poly=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:"rgba(75,30,171,0.10)", strokeColor:"rgba(75,30,171,0.85)", strokeWidth:1.5 }); poly.path=square(a.lat,a.lng,(a.fp||10)/2,a.h||10); map.append(poly);
-  const tag=new lib.Marker3DInteractiveElement({ position:{lat:a.lat,lng:a.lng,altitude:4}, altitudeMode:"RELATIVE_TO_MESH", label:a.tag, sizePreserved:true, drawsWhenOccluded:true }); tag.append(pinTemplate("#172044",0.72,"#E9EFFF").tpl);
-  tag.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); assetEditor(a,$("#mode")); flyAsset(a); }); map.append(tag);
-  OV.asset[a.tag]={ poly, tag, lat:a.lat, lng:a.lng, h:a.h, fp:a.fp };
-}
+function syncAssetOverlays(){ /* assets carry no location (register only) */ }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
 function woColor(w){ return col(status(w.statusId)?.color).map; }
 function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
@@ -1154,7 +1182,6 @@ function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.lege
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
 function fly(cam,ms=1800){ if(!map) return; flying=true; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); clearTimeout(flyT); flyT=setTimeout(()=>{ flying=false; },ms+150); map.addEventListener("gmp-animationend",()=>{ flying=false; },{once:true}); }
-function flyAsset(a){ fly({ center:{lat:a.lat,lng:a.lng,altitude:(a.ground??GROUND_FALLBACK)+(a.h||10)*0.5}, range:Math.max(220,(a.fp||10)*4+(a.h||10)*3), tilt:66, heading:-20 },2000); }
 const GROUND_FALLBACK=80; // m above sea level at the Dofasco works when a pin has no recorded ground elevation
 function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
   const a=locAnchor(w); const ground=(a.ground??GROUND_FALLBACK), alt=ground+(a.alt||0)+(P.length>=3?locHeight(w)/2:P.length===1?6:2);
@@ -1168,8 +1195,8 @@ $$("#hud [data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view, g=site
 $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 }),{once:true}); };
 
 /* ---------- mode bar, placing and drawing ---------- */
-function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
-function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view","Click a pin or a work area to open it.",false); }
+function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; if(isMobile()&&S.open){ if(cls==="draw"||cls==="place") setSheet("peek"); else if($("#peek").dataset.sheet==="peek") setSheet("half"); } md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
+function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view",isMobile()?"Tap a pin or an area to open it.":"Click a pin or a work area to open it.",false); }
 $("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round(e.position.altitude||0) };
@@ -1181,7 +1208,7 @@ function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loade
   startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:1, onDone:p=>{ setPoints(id,p); syncPointHandles(); relock(); }, onCancel:()=>{ syncPointHandles(); relock(); } }); }
 function relock(){ if(S.woView&&S.open&&map){ const w=W(S.open); if(w&&pts(w).length) flyWO(w); } }
 function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } setTab("map"); selPt=i; syncPointHandles();
-  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); orbitSync(); setMode("place",`Point ${i+1}`,`Click the model where point <b>${i+1}</b> should be.`,true); }
+  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); orbitSync(); setMode("place",`Point ${i+1}`,`${isMobile()?"Tap":"Click"} the model where point <b>${i+1}</b> should be.`,true); }
 function selectPoint(i){ selPt=selPt===i?null:i; syncPointHandles(); if(S.open) renderRecord(); const w=W(S.open); if(selPt!=null&&w){ const p=pts(w)[selPt]; if(p&&map){ fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } } }
 /* numbered handles for the open record's points; click → select, then Move / Remove in the mode bar */
 const PTH=[];
@@ -1197,7 +1224,8 @@ function renderDraw(){
   if(d.pts.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(255,106,0,0.95)", strokeWidth:d.pts.length===2?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>({lat:p.lat,lng:p.lng,altitude:1})); map.append(l); OV.draw.push(l); }
   if(d.pts.length>=3&&d.height>0){ const g=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5 }); g.path=[...d.pts,d.pts[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:d.height})); map.append(g); OV.draw.push(g); }
   const n=d.pts.length; const kind=d.kind==="points"?` → ${ {0:"nothing yet",1:"pin",2:"line"}[n]||"area" }`:"";
-  setMode("draw",d.label,`<b>${n}</b> point${n===1?"":"s"}${kind} · click the model to add${d.kind==="site"&&n<3?" (3 minimum)":""}`,true);
+  const verb=isMobile()?"tap":"click";
+  setMode("draw",d.label,`<b>${n}</b> point${n===1?"":"s"}${kind} · ${verb} the model to add${d.kind==="site"&&n<3?" (3 minimum)":""}`,true);
   $("#draw-acts").hidden=false; $("#draw-done").disabled=n<d.min; $("#draw-undo").disabled=!n;
 }
 function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; V.draw=null; map?.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
@@ -1207,26 +1235,20 @@ $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   startDraw("site",{ initial:BOUNDARY(), label:"Site boundary", onDone:async pts=>{ S.site={ ...(S.site||{}), boundary:pts }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
   fly({ center:{lat:siteGeom().c.lat,lng:siteGeom().c.lng,altitude:0}, range:siteGeom().range*1.05, tilt:0, heading:0 }); };
 
-/* ---------- asset register editor (V71–V74) ---------- */
+/* ---------- asset register editor — a register entry, no location (tag · name · area) ---------- */
 function assetEditor(a,anchor,opts={}){
-  const isNew=!a; a=a||{ tag:opts.tag||"", name:"", area:"", lat:null, lng:null, h:20, fp:10 }; const onCreate=opts.onCreate;
+  const isNew=!a; a=a||{ tag:opts.tag||"", name:"", area:"" }; const onCreate=opts.onCreate;
   const refs=isNew?0:live().filter(w=>(w.values?.asset||[]).includes(a.tag)).length;
   const el=openPop(anchor,`<div class="sec">${isNew?"New asset":"Asset "+P(a.tag)}</div>
     <div class="fr"><label>Tag</label><input type="text" id="a-tag" value="${P(a.tag)}" ${isNew?"":"disabled"} style="width:120px" class="mono"></div>
     <div class="fr"><label>Name</label><input type="text" id="a-name" value="${P(a.name)}" style="width:200px"></div>
-    <div class="fr"><label>Area</label><input type="text" id="a-area" value="${P(a.area||"")}" style="width:200px" placeholder="Ironmaking…"></div>
-    <div class="fr"><label>Height m</label><input type="number" id="a-h" value="${a.h??""}" style="width:80px"></div>
-    <div class="fr"><label>Footprint m</label><input type="number" id="a-fp" value="${a.fp??""}" style="width:80px"></div>
-    <div class="fr"><label>Position</label><span class="mono" id="a-pos" style="font-size:12px">${a.lat!=null?`${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}`:"not set"}</span></div>
-    <div class="fr"><button class="btn sm" id="a-move">${a.lat!=null?"Move on map":"Click on map"}</button>${!isNew?`<button class="btn sm" id="a-fly">Fly to</button>`:""}<button class="btn sm primary" id="a-save" style="margin-left:auto">${isNew?"Create":"Save"}</button></div>
-    ${!isNew?`<div class="hr"></div><div class="mi danger" id="a-del">Delete asset<span class="r">${refs?refs+" work order"+(refs===1?"":"s")+" reference it":""}</span></div>`:""}`,{width:320,select:isNew});
+    <div class="fr"><label>Area</label><input type="text" id="a-area" value="${P(a.area||"")}" style="width:200px" placeholder="Ironmaking, Utilities…"></div>
+    <div class="fr"><span class="hint">${refs?refs+" work order"+(refs===1?"":"s")+" reference this asset":"Location lives on the work order, not the asset."}</span><button class="btn sm primary" id="a-save" style="margin-left:auto">${isNew?"Create":"Save"}</button></div>
+    ${!isNew?`<div class="hr"></div><div class="mi danger" id="a-del">Delete asset</div>`:""}`,{width:320,select:isNew});
   if(isNew&&opts.tag) setTimeout(()=>el.querySelector('#a-name')?.focus(),20);
-  let pos=a.lat!=null?{lat:a.lat,lng:a.lng}:null;
-  const read=()=>({ tag:el.querySelector("#a-tag").value.trim().toUpperCase(), name:el.querySelector("#a-name").value.trim(), area:el.querySelector("#a-area").value.trim(), h:+el.querySelector("#a-h").value||10, fp:+el.querySelector("#a-fp").value||10 });
-  const save=async()=>{ const d=read(); if(!d.tag||!d.name){ toast("Tag and name are required.",true); return; } if(isNew&&asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } if(!pos){ toast("Set the position by clicking the map.",true); return; } await DB.set(AS_COL+"/"+d.tag,{ ...d, lat:pos.lat, lng:pos.lng }); closePop(); toast(`Asset ${d.tag} saved.`); if(isNew) onCreate?.(d.tag); };
-  el.querySelector("#a-save").onclick=save;
-  el.querySelector("#a-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } const draft={ ...read(), pos }; closePop(); setTab("map"); V.placing={ onPlace:async p=>{ if(isNew){ const d=draft; if(!d.tag||!d.name){ toast("Tag and name are required — reopen ＋ Asset.",true); return; } if(asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } await DB.set(AS_COL+"/"+d.tag,{ tag:d.tag,name:d.name,area:d.area,h:d.h,fp:d.fp, lat:p.lat, lng:p.lng, ground:p.ground }); onCreate?.(d.tag); toast(`Asset ${d.tag} created.`); } else { await DB.update(AS_COL+"/"+a.tag,{ lat:p.lat, lng:p.lng, ground:p.ground }); toast(`Asset ${a.tag} moved.`); } } }; orbitSync(); map.classList.add("placing"); setMode("place","Place asset",`Click the model where <b>${P(draft.tag||"the asset")}</b> stands.`,true); };
-  el.querySelector("#a-fly")?.addEventListener("click",()=>{ setTab("map"); flyAsset(a); });
+  const read=()=>({ tag:el.querySelector("#a-tag").value.trim().toUpperCase(), name:el.querySelector("#a-name").value.trim(), area:el.querySelector("#a-area").value.trim() });
+  const save=async()=>{ const d=read(); if(!d.tag||!d.name){ toast("Tag and name are required.",true); return; } if(isNew&&asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } await DB.set(AS_COL+"/"+d.tag,d,true); closePop(); toast(`Asset ${d.tag} saved.`); if(isNew) onCreate?.(d.tag); };
+  el.querySelector("#a-save").onclick=save; el.querySelectorAll("input").forEach(i=>i.onkeydown=e=>{ if(e.key==="Enter") save(); });
   el.querySelector("#a-del")?.addEventListener("click",async()=>{ if(refs){ toast(`${a.tag} is referenced by ${refs} work order${refs===1?"":"s"}; remove those references first.`,true); return; } if(!confirm(`Delete asset ${a.tag}?`)) return; await DB.del(AS_COL+"/"+a.tag); closePop(); });
 }
 
@@ -1236,7 +1258,7 @@ function assetEditor(a,anchor,opts={}){
 let LOCK=null, flying=false, flyT=null;
 function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); if(map){ flyWO(w); } woMode(); orbitSync(); }
 function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
-function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",`<b>${w.id}</b> · drag to rotate · wheel or pinch to zoom · <em>Exit Work Order</em> is at the top of the panel`,false); }
+function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",isMobile()?`<b>${w.id}</b> · drag to rotate · pinch to zoom`:`<b>${w.id}</b> · drag to rotate · wheel or pinch to zoom · <em>Exit Work Order</em> is at the top of the panel`,false); }
 function orbitSync(){ const on=S.woView&&!!LOCK&&!V.draw&&!V.placing; $("#orbit").hidden=!on; }
 function installLock(){
   const el=$("#orbit"); const ptrs=new Map(); let last=null, pinch0=null, range0=0;
