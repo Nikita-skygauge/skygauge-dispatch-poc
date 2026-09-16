@@ -1177,9 +1177,10 @@ async function initMap(){
   $("#mapgate").hidden=true; $("#loading").hidden=false;
   try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); }catch(e){ showMapGate("Could not load Google Maps: "+(e.message||e)); return; }
   const cam=siteCam(), g=siteGeom();
-  map=new lib.Map3DElement({ ...cam, mode:"SATELLITE" });   // no bounds / altitude clamps — stock Google 3D navigation; the Site button is the recommended framing
+  map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", gestureHandling:"GREEDY" });   // GREEDY = plain Google Maps gestures: scroll zooms without a modifier key, one-finger drag pans. AUTO falls back to "cooperative" (⌘+scroll) in some layouts.
   map.addEventListener("gmp-error",e=>showMapGate("Map error: "+(e.detail?.message||"see console")));
   map.addEventListener("gmp-click",onMapClick); installLock();
+  map.addEventListener("dblclick",()=>{ if(S.woView&&S.open&&!V.draw&&!V.placing){ const w=W(S.open); if(w) flyWO(w); } });
   $("#canvas-wrap").prepend(map); $("#loading").hidden=true;
   $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`;
   requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); });
@@ -1281,9 +1282,9 @@ function assetEditor(a,anchor,opts={}){
 let LOCK=null, flying=false, flyT=null;
 function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); if(map){ setTimeout(()=>flyWO(w), isMobile()?260:0); } }
 function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
-function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",isMobile()?`<b>${w.id}</b> · drag to rotate · pinch to zoom`:`<b>${w.id}</b> · drag to rotate · wheel or pinch to zoom · <em>Exit Work Order</em> is at the top of the panel`,false); }
-function orbitSync(){ const on=S.woView&&!!LOCK&&!V.draw&&!V.placing; $("#orbit").hidden=!on; }
-function installLock(){
+function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
+function orbitSync(){ $("#orbit").hidden=true; }   // stock Google 3D gestures everywhere; no custom control layer
+function installLock(){ return;
   const el=$("#orbit"); const ptrs=new Map(); let last=null, pinch0=null, range0=0;
   const apply=(h,t,r)=>{ if(!map||!LOCK) return; map.center=LOCK; if(h!=null) map.heading=((h%360)+360)%360; if(t!=null) map.tilt=Math.max(0,Math.min(85,t)); if(r!=null) map.range=Math.max(15,Math.min(4000,r)); };
   el.addEventListener("pointerdown",e=>{ if(flying) return; el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); el.classList.add("drag"); last={x:e.clientX,y:e.clientY}; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); range0=map.range; } });
