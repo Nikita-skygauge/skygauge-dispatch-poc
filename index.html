@@ -197,7 +197,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 .vw-tools{display:flex;align-items:center;gap:8px;background:rgba(20,27,51,.9);border:1px solid #3A4270;border-radius:999px;padding:6px 10px}
 .vw-tools .tool{border-radius:999px}.vw-tools .tool.on{background:#fff;color:#0B0F1F;border-color:#fff}
 .swc{width:26px;height:26px;border-radius:50%;border:3px solid transparent;cursor:pointer;flex:none;box-shadow:0 0 0 1px rgba(0,0,0,.4) inset}.swc.on{border-color:#fff;transform:scale(1.15)}
-.marks{display:flex;flex-direction:column;gap:6px}
+.marks{display:flex;flex-direction:column;gap:6px;flex:1}.vw-foot{margin-top:auto;padding-top:12px;border-top:1px solid #3A4270}
 .mk{display:grid;grid-template-columns:26px 1fr 28px;gap:8px;align-items:start;padding:6px;border-radius:8px;border:1px solid transparent;cursor:pointer}.mk:hover{background:#172044}.mk.sel{border-color:#00FFE5;background:#172044}
 .mk .dot{width:26px;height:26px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#0B0F1F;font-family:var(--mono);box-shadow:0 0 0 1px rgba(0,0,0,.4) inset;margin-top:4px}
 .mk .note{background:#141B33;border-color:#3A4270;color:#fff;resize:none;min-height:34px;padding:6px 8px;font-size:13px;line-height:1.35}
@@ -206,6 +206,25 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 .vw-side{border-left:1px solid #3A4270;padding:14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
 .vw-side .in{background:#141B33;border-color:#3A4270;color:#fff}
 @media (max-width:700px){ #viewer{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto} .vw-img{padding:8px} .vw-side{border-left:0;border-top:1px solid #3A4270;max-height:42dvh;padding:10px} .vw-tools .btn{min-height:40px} .swc{width:32px;height:32px} .mk .note{font-size:16px} }
+
+/* notes (one drawing = one note) */
+.notes{display:flex;flex-direction:column;gap:8px}
+.note{display:grid;grid-template-columns:140px 1fr;gap:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px;cursor:pointer}
+.note:hover{border-color:var(--accent)}
+.nph{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#000}.nph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nph svg{position:absolute;inset:0;width:100%;height:100%}.nph text{font-family:var(--mono)}
+.nnum{position:absolute;left:6px;top:6px;background:rgba(11,15,31,.8);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px}
+.nbody{display:flex;flex-direction:column;min-width:0}
+.ntext{font:inherit;font-size:14px;line-height:1.45;flex:1;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--ink);padding:4px 6px;resize:none;min-height:34px;width:100%}.ntext:hover{background:var(--panel)}.ntext:focus{background:var(--panel);border-color:var(--line);box-shadow:none}.ntext::placeholder{color:var(--ink-3);font-style:italic}
+.nmeta{font-size:11.5px;color:var(--ink-3);margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:6px}.nmeta i{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.4) inset;flex:none}
+@media (max-width:860px){ .note{grid-template-columns:104px 1fr;gap:10px} .ntext{font-size:16px} }
+
+/* creation flow */
+body.creating #mode,body.creating #draw-acts{display:none!important}
+body.creating #pk-save,body.creating #pk-fly,body.creating #pk-more,body.creating #pk-close,body.creating #pk-exit,body.creating.wo-view[data-tab="map"] #pk-exit{display:none!important}
+body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;flex-direction:column;flex:1;min-height:0}
+.create-foot{margin-top:auto;display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--panel)}
+.create-foot .btn{min-height:44px;padding:0 18px;font-size:14px;font-weight:600}
+@media (max-width:860px){ body.creating{--sheet-half:44dvh} .create-foot{position:fixed;left:0;right:0;bottom:0;margin:0;padding:10px 14px calc(10px + var(--sab));border-top:1px solid var(--line);z-index:30} .create-foot .btn{flex:1} body.creating #pbody{padding-bottom:calc(90px + var(--sab))} }
 
 /* popovers */
 .pop{position:fixed;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-width:240px;max-width:min(360px,96vw);max-height:min(440px,70vh);overflow:auto;padding:6px;font-size:13px}
@@ -462,7 +481,7 @@ function onDbError(e,p){ console.error("db",p,e); if(String(e.code||e).includes(
    ===================================================================== */
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 const P=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const S = { user:null, admin:false, allow:DEFAULT_ALLOWLIST, schema:null, site:null, wos:[], assets:[], members:[], open:null, tab:"map", view:"board", sub:"wo", q:"", legendOff:new Set(), hidden:{board:new Set(),table:new Set()}, sort:null, unsub:[] };
+const S = { creating:null, user:null, admin:false, allow:DEFAULT_ALLOWLIST, schema:null, site:null, wos:[], assets:[], members:[], open:null, tab:"map", view:"board", sub:"wo", q:"", legendOff:new Set(), hidden:{board:new Set(),table:new Set()}, sort:null, unsub:[] };
 const LSK = { key:"sgd_gmaps_key", email:"sgd_email_for_link", view:"sgd9_view" };
 const domainOf = e => String(e||"").toLowerCase().split("@")[1]||"";
 
@@ -598,7 +617,7 @@ const TODAY = ()=>{ const d=new Date(); d.setHours(0,0,0,0); return d; };
 const daysUntil = s => Math.round((new Date(s+"T00:00:00")-TODAY())/86400000);
 const fmtDate = (s,withTime) => { if(!s) return ""; const d=new Date(s.length>10?s:s+"T00:00:00"); const o={month:"short",day:"numeric"}; if(d.getFullYear()!==new Date().getFullYear()) o.year="numeric"; let t=d.toLocaleDateString(undefined,o); if(withTime||s.length>10&&!/T00:00(:00)?/.test(s)) t+=" "+d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}); return t; };
 const rel = s => { const m=(Date.now()-new Date(s))/60000; if(m<1) return "just now"; if(m<60) return Math.round(m)+" min ago"; if(m<1440) return Math.round(m/60)+" h ago"; return Math.round(m/1440)+" d ago"; };
-const live = () => S.wos.filter(w=>!w.trashed);
+const live = () => S.wos.filter(w=>!w.trashed && !(w.draft && S.creating!==w.id));
 const trashed = () => S.wos.filter(w=>w.trashed);
 const W = id => S.wos.find(w=>w.id===id);
 const asset = tag => S.assets.find(a=>a.tag===tag);
@@ -610,9 +629,9 @@ async function createWO(init={}){
   const seq=await DB.nextSeq(); const yy=String(new Date().getFullYear()).slice(-2);
   const id=`WO-${yy}-${String(seq).padStart(3,"0")}`;
   const st=init.statusId||defaultStatus("todo")?.id;
-  const w={ seq, title:init.title||"", statusId:st, values:init.values||{}, location:init.location||{points:[],height:10}, created:now(), createdBy:userRef(), edited:now(), editedBy:userRef(), trashed:false, completedAt:status(st)?.group==="complete"?now():null };
+  const w={ seq, title:init.title||"", statusId:st, values:init.values||{}, location:init.location||{points:[],height:10}, created:now(), createdBy:userRef(), edited:now(), editedBy:userRef(), trashed:false, draft:!!init.draft, completedAt:status(st)?.group==="complete"?now():null };
   await DB.set(WO_COL+"/"+id,w);
-  log(id,"created the work order");
+  if(!init.draft) log(id,"created the work order");
   return id;
 }
 function log(id,text){ return DB.add(WO_COL+"/"+id+"/activity",{ t:now(), by:userRef(), text }).catch(console.error); }
@@ -650,7 +669,7 @@ function markSaved(){ const b=$("#pk-save"); if(!b) return; clearTimeout(saveT);
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
 async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m.remove(); o.area?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
-function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); }
+function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); const dcut=Date.now()-86400000; S.wos.filter(w=>w.draft&&S.creating!==w.id&&w.createdBy?.uid===S.user.uid&&new Date(w.created)<dcut).forEach(w=>purgeWO(w.id)); }
 async function duplicateWO(id){ const w=W(id); if(!w) return; const nid=await createWO({ title:(w.title||"Untitled")+" (copy)", statusId:w.statusId, values:structuredClone(w.values||{}), location:structuredClone(w.location) }); openWO(nid); }
 async function saveSchema(){ S.schema.version=(S.schema.version||1); await DB.set("workspace/schema",S.schema); renderAll(); }
 
@@ -946,6 +965,7 @@ function closePeek(){ closeViewer(); stopPhotos(); clearPointHandles(); S.open=n
 function highlightCard(id){ $$(".kcard.hl").forEach(c=>c.classList.remove("hl")); if(id){ const c=document.querySelector(`.kcard[data-id="${id}"]`); if(c){ c.classList.add("hl"); c.scrollIntoView({block:"nearest"}); } } }
 function renderRecord(){
   const w=W(S.open); if(!w){ closePeek(); return; }
+  if(S.creating===w.id){ renderCreate(w); return; }
   $("#pk-id").textContent=w.id+(w.trashed?" · in Trash":"");
   const filled=props().filter(p=>p.system||!isEmpty(w.values?.[p.id])), empty=props().filter(p=>!p.system&&isEmpty(w.values?.[p.id]));
   const rowHTML=p=>`<div class="prop" data-pid="${p.id}" draggable="true"><div class="pn" title="${P(p.name)} · ${TYPE_LABEL[p.type]}">${ico(p.type)}<span style="overflow:hidden;text-overflow:ellipsis">${P(p.name)}</span></div><div class="pv ${p.system?"ro":""}" data-edit="${p.id}">${renderValue(p,w.values?.[p.id],w)}</div></div>`;
@@ -967,11 +987,12 @@ function renderRecord(){
       <button class="btn sm teal" id="l-fly" ${P0.length?"":"disabled"} style="margin-left:auto">Fly to</button></div>
     </div></section>
     ${galleryHTML()}
+    ${notesHTML()}
     <section class="ps"><h3 style="cursor:default">Documents</h3><div class="fileblock">Document uploads (PDFs, reports) wait on Firebase Storage — a billing decision. Photos work now.</div></section>
     <section class="ps"><h3>Comments</h3><div class="hint">Comments arrive in the next build.</div></section>
     <section class="ps"><h3 id="act-h">${showAct?"▾":"▸"} Activity <span class="mono" style="font-weight:400" id="act-n">${ACT.length}</span></h3><div id="act" ${showAct?"":"hidden"}></div></section>
     <div class="hint" style="margin-top:22px">Created ${P(fmtDate(w.created,true))} by ${P(w.createdBy?.name||"")} · last edited ${P(rel(w.edited))} by ${P(w.editedBy?.name||"")}${w.completedAt?` · completed ${P(fmtDate(w.completedAt,true))}`:""}</div>`;
-  renderActivity(); wireGallery();
+  renderActivity(); wireGallery(); wireNotes();
   const t=$("#ptitle"); const fit=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; fit(); t.oninput=fit;
   t.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); t.blur(); } if(e.key==="Escape"){ t.value=w.title||""; fit(); t.blur(); e.stopPropagation(); } };
   t.onblur=()=>setTitle(w.id,t.value.trim());
@@ -1003,6 +1024,26 @@ function recordMenu(anchor){
     if(a==="json"){ try{ await navigator.clipboard.writeText(JSON.stringify(w,null,2)); toast("JSON copied"); }catch{} } };
 }
 
+function renderCreate(w){
+  const P0=pts(w); const kind=locKind(P0.length);
+  $("#pk-id").textContent="New work order";
+  $("#pbody").innerHTML=`<div class="create">
+    <h2 style="font-size:22px;font-weight:600;margin:6px 0 4px">Where is the work?</h2>
+    <p class="hint">${isMobile()?"Tap":"Click"} the model to add points. One point is a pin, two make a line, three or more make an area. Points save as you go.</p>
+    <div class="locbox" style="margin-top:12px">
+      <div class="eyebrow" style="margin-bottom:6px">${P0.length?({pin:"Pin",line:"Line",area:"Area · "+P0.length+" corners"})[kind]:"No points yet"}</div>
+      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:""}
+      <div class="acts" style="margin-top:8px"><button class="btn sm" id="c-undo" ${P0.length?"":"disabled"}>Undo last point</button>${P0.length>=3?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="1" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}</div>
+    </div>
+    <div class="create-foot"><button class="btn" id="c-cancel">Cancel</button><button class="btn teal" id="c-create" ${P0.length?"":"disabled"}>Create Work Order</button></div>
+  </div>`;
+  $("#c-undo").onclick=()=>{ if(V.draw){ $("#draw-undo").click(); } else { const p=pts(w).slice(); p.pop(); setPoints(w.id,p); } };
+  $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(1,+e.target.value||10)));
+  $$("#pbody [data-rm]").forEach(b=>b.onclick=()=>{ const p=pts(w).slice(); p.splice(+b.dataset.rm,1); if(V.draw){ V.draw.pts=p.map(q=>({...q})); renderDraw(); } setPoints(w.id,p); });
+  $("#c-cancel").onclick=cancelCreate; $("#c-create").onclick=finishCreate;
+  if(!V.draw && S.creating===w.id && map) addPoints(w.id);
+}
+
 /* =====================================================================
    VIEWS — Board, Table, Trash + register + top bar
    ===================================================================== */
@@ -1024,7 +1065,7 @@ function renderViews(){
 function cardHTML(w){
   const vis=props().filter(p=>(S.schema.cardProps||[]).includes(p.id)&&!S.hidden.board.has(p.id));
   const bits=vis.map(p=>{ const v=w.values?.[p.id]; return isEmpty(v)&&!p.system?"":renderValue(p,v,w,true); }).filter(Boolean);
-  const nph=(w.values?.photos||[]).length; if(nph&&!(S.schema.cardProps||[]).includes("photos")) bits.push(`<span class="hint">📷 ${nph}</span>`);
+  const nph=(w.values?.photos||[]).length; if(nph&&!(S.schema.cardProps||[]).includes("photos")) bits.push(`<span class="hint">📷 ${nph}</span>`); if(w.noteCount) bits.push(`<span class="hint">✎ ${w.noteCount}</span>`);
   return `<div class="kcard ${S.open===w.id?"hl":""}" draggable="true" data-id="${w.id}"><div class="t">${P(w.title||"Untitled")}</div><div class="m"><span class="id">${w.id}</span>${bits.join("")}</div></div>`;
 }
 function renderBoard(rows){
@@ -1078,7 +1119,7 @@ function renderTree(){
   if(S.sub==="wo"){
     const rows=filtered();
     $("#tree").innerHTML=["todo","progress","complete"].map(g=>{ const ws=rows.filter(w=>status(w.statusId)?.group===g); if(!ws.length) return ""; return `<div class="eyebrow" style="padding:8px 8px 2px">${GROUPS[g]} · ${ws.length}</div>${ws.map(w=>`<div class="it ${S.open===w.id?"sel":""}" data-wo="${w.id}"><span class="tag">${w.id.slice(-3)}</span><span class="n" title="${P(w.title)}">${P(w.title||"Untitled")}</span><i style="width:8px;height:8px;border-radius:50%;background:${col(status(w.statusId)?.color).map};flex:none"></i></div>`).join("")}`; }).join("")||`<div class="kempty">No work orders yet.<br><button class="link" id="tree-new">Create the first one</button></div>`;
-    $("#tree-new")?.addEventListener("click",()=>$("#new-wo-map").click());
+    $("#tree-new")?.addEventListener("click",()=>startCreate());
   } else {
     const as=S.assets.filter(a=>!q||(a.tag+" "+a.name).toLowerCase().includes(q));
     const areas=[...new Set(as.map(a=>a.area||"Other"))];
@@ -1116,11 +1157,11 @@ function wireUI(){
   $$("#viewsw button").forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; saveView(); renderViews(); });
   $("#q").oninput=e=>{ S.q=e.target.value; renderAll(); };
   $("#b-new").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); };
-  $("#new-wo-map").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; enterWOView(id); if(map) addPoints(id); };
+  $("#new-wo-map").onclick=()=>startCreate();
   $("#b-props").onclick=e=>propsToggle(e.currentTarget);
   $("#b-export").onclick=exportJSON;
   $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w) enterWOView(w.id); };
-  $("#site-view").onclick=exitWOView; $("#pk-exit").onclick=exitWOView;
+  $("#site-view").onclick=exitWOView; $("#pk-exit").onclick=()=>{ if(S.creating) cancelCreate(); else exitWOView(); };
   $("#pk-save").onclick=()=>{ const b=$("#pk-save"); clearTimeout(saveT); b.textContent="Saved ✓"; b.classList.remove("pend"); toast("All changes are saved automatically."); };
   $("#userbtn").onclick=e=>userMenu(e.currentTarget);
   $("#new-asset").onclick=e=>assetEditor(null,e.currentTarget);
@@ -1200,7 +1241,7 @@ const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8
 function woColor(w){ return col(status(w.statusId)?.color).map; }
 function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
 function addWOOverlay(w){
-  const P=pts(w); if(!P.length) return;
+  const P=pts(w); if(!P.length||w.draft) return;
   const o={ sig:JSON.stringify(w.location||{}), m:null, pin:null, area:null, line:null };
   const c=woColor(w); const a=locAnchor(w); const h=locHeight(w);
   o.m=new lib.Marker3DInteractiveElement({ position:{lat:a.lat,lng:a.lng,altitude:P.length===1?(a.alt||0):P.length===2?2:h}, altitudeMode:"RELATIVE_TO_GROUND", extruded:P.length===1, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
@@ -1221,7 +1262,7 @@ function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
   const r=P.length===1?110:Math.max(100,ext*1.8);
   const cam={ center:{lat:a.lat,lng:a.lng,altitude:alt}, range:r, tilt:62, heading:map.heading??-30 };
   flying=true; LOCK=S.woView?{ ...cam.center }:null; orbitSync(); map.flyCameraTo({ endCamera:cam, durationMillis:1600 });
-  clearTimeout(flyT); const done=()=>{ flying=false; if(S.woView&&S.open===w.id){ LOCK={ ...cam.center }; map.center=LOCK; } orbitSync(); }; flyT=setTimeout(done,1750); map.addEventListener("gmp-animationend",done,{once:true});
+  clearTimeout(flyT); const done=()=>{ flying=false; if(S.woView&&S.open===w.id){ const c=map.center; const off=c?Math.hypot((c.lat-cam.center.lat)*111320,(c.lng-cam.center.lng)*111320*Math.cos(cam.center.lat*Math.PI/180)):1e9; if(off>25||Math.abs((map.range||0)-cam.range)>cam.range*0.5){ map.center=cam.center; map.range=cam.range; map.tilt=cam.tilt; map.heading=cam.heading; } } orbitSync(); }; flyT=setTimeout(done,1750); map.addEventListener("gmp-animationend",done,{once:true});
 }
 $$("#hud [data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view, g=siteGeom(); if(v==="site") fly(siteCam()); if(v==="north") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*0.95, tilt:60, heading:170 }); if(v==="plan") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*1.05, tilt:0, heading:0 }); });
 $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 }),{once:true}); };
@@ -1288,7 +1329,9 @@ function assetEditor(a,anchor,opts={}){
    Google's gesture controller has no "fixed pivot" mode, so in this view a transparent layer over the map takes the
    input itself: drag → heading/tilt, wheel/pinch → range, centre never changes. Lifted while placing or drawing points. */
 let LOCK=null, flying=false, flyT=null;
-function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); if(map){ setTimeout(()=>flyWO(w), isMobile()?260:0); } }
+function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync();
+  // fly only after the map has its final size: an animation started on a hidden or resizing map is dropped by the engine
+  if(map){ requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>flyWO(w), (isMobile()||wasHidden)?320:60))); } }
 function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
 function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
 function orbitSync(){ $("#orbit").hidden=true; }   // stock Google 3D gestures everywhere; no custom control layer
@@ -1303,6 +1346,21 @@ function installLock(){ return;
   el.addEventListener("pointerup",up); el.addEventListener("pointercancel",up);
   el.addEventListener("wheel",e=>{ e.preventDefault(); if(flying) return; apply(null,null,map.range*Math.exp(e.deltaY*0.0012)); },{passive:false});
   el.addEventListener("dblclick",()=>{ const w=W(S.open); if(w) flyWO(w); });
+}
+
+/* ---------- Creation flow: location first, then Create Work Order ---------- */
+async function startCreate(){
+  const id=await createWO({ draft:true }); S.creating=id; document.body.classList.add("creating");
+  enterWOView(id); if(map) addPoints(id); else toast("The map is not loaded — points can be added once it is.",true); if(isMobile()) setSheet("half");
+}
+async function finishCreate(){
+  const id=S.creating; const w=W(id); if(!w) return; if(!pts(w).length){ toast("Add at least one point first.",true); return; }
+  clearDraw(); S.creating=null; document.body.classList.remove("creating"); w.draft=false; w._focusTitle=true;
+  await DB.update(WO_COL+"/"+id,{ draft:false, ...stamp() }); log(id,"created the work order");
+  refreshWOOverlay(w,true); syncPointHandles(); renderAll(); woMode(); if(map) flyWO(w); setTimeout(()=>$("#ptitle")?.focus(),50);
+}
+async function cancelCreate(){
+  const id=S.creating; clearDraw(); S.creating=null; document.body.classList.remove("creating"); exitWOView(); if(id) await purgeWO(id);
 }
 
 /* =====================================================================
@@ -1426,7 +1484,7 @@ function galleryHTML(){
     :`<div class="hint">No photos yet. Take one on your phone: the position and the direction you were facing are recorded and drawn on the model.</div>`}
     <div class="hint" style="margin-top:6px">Positions are approximate — GPS 3–30 m, compass ±15° or worse near heavy steel. Open a photo to move its icon or correct the heading.</div></section>`;
 }
-function renderGallery(){ const g=$("#gal"); if(!g) return; g.outerHTML=galleryHTML(); wireGallery(); }
+function renderGallery(){ const g=$("#gal"); if(!g) return; g.outerHTML=galleryHTML(); wireGallery(); renderNotes(); }
 function wireGallery(){
   const w=W(S.open); if(!w) return;
   $("#ph-take")?.addEventListener("click",()=>openCamera(w.id));
@@ -1436,19 +1494,19 @@ function wireGallery(){
 }
 
 /* ---------- viewer with pose correction (V79, V80) ---------- */
-let VW=null, MK={ pen:false, color:"#FF1A00", sel:null };
+let VW=null, MK={ pen:true, color:"#FF1A00", sel:null };
 const MARK_COLORS=["#FF1A00","#00FFE5","#FFD400","#2D7FF9","#FFFFFF"];
-async function openViewer(pid){
+async function openViewer(pid,markId){
   const w=W(S.open); const p=PH.find(x=>x.id===pid); if(!w||!p) return;
-  closeViewer(); highlightPhoto(pid); MK.sel=null;
+  closeViewer(); highlightPhoto(pid); MK.sel=markId||null; MK.pen=true;
   const el=document.createElement("div"); el.id="viewer"; VW=el;
   el.innerHTML=`<div class="vw-top"><span class="mono">${P(w.id)} · ${P(fmtDate(p.t,true))} · ${P(p.by?.name||"")}</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn sm" id="vw-prev">‹</button><button class="btn sm" id="vw-next">›</button><button class="btn sm" id="vw-x">✕</button></span></div>
     <div class="vw-img"><div class="vw-stage"><img src="${p.thumb}" id="vw-full" alt="" draggable="false"><svg id="vw-svg" viewBox="0 0 1 1" preserveAspectRatio="none"></svg></div>
-      <div class="vw-tools"><button class="btn sm tool" id="mk-pen" title="Draw or tap to mark">✎ Mark</button>${MARK_COLORS.map(c=>`<span class="swc ${c===MK.color?"on":""}" data-c="${c}" style="background:${c}"></span>`).join("")}<button class="btn sm" id="mk-undo" title="Remove last mark">↶</button></div></div>
+      <div class="vw-tools"><button class="btn sm tool on" id="mk-pen" title="Draw or tap to mark">✎ Mark</button>${MARK_COLORS.map(c=>`<span class="swc ${c===MK.color?"on":""}" data-c="${c}" style="background:${c}"></span>`).join("")}<button class="btn sm" id="mk-undo" title="Remove last mark">↶</button></div></div>
     <div class="vw-side">
       <input class="in" id="vw-cap" placeholder="Add a caption…" value="${P(p.caption||"")}">
       <div class="marks" id="mk-list"></div>
-      <div class="acts"><button class="btn sm teal" id="vw-move">Move on model</button><button class="btn sm" id="vw-fly" ${hasPos(p)?"":"disabled"}>Fly to</button><button class="btn sm danger" id="vw-del" style="margin-left:auto">Delete</button></div>
+      <div class="acts vw-foot"><button class="btn sm teal" id="vw-move">Move on model</button><button class="btn sm" id="vw-fly" ${hasPos(p)?"":"disabled"}>Fly to</button><button class="btn sm danger" id="vw-del" style="margin-left:auto">Delete</button></div>
     </div>`;
   document.body.append(el);
   getFull(w.id,pid).then(u=>{ if(u&&VW===el) el.querySelector("#vw-full").src=u; });
@@ -1461,6 +1519,7 @@ async function openViewer(pid){
   el.querySelector("#vw-fly").onclick=()=>{ setTab("map"); flyPhoto(p); };
   el.querySelector("#vw-del").onclick=()=>deletePhoto(w.id,pid);
   setupMarks(el,w,p);
+  if(markId){ const row=el.querySelector(`.mk[data-id="${markId}"]`); row?.scrollIntoView({block:"nearest"}); }
 }
 /* ---------- markups: freehand strokes and numbered points, each with a note ---------- */
 function setupMarks(el,w,p){
@@ -1469,7 +1528,7 @@ function setupMarks(el,w,p){
   const fit=()=>{ // size the stage to the rendered image box so normalized coords line up
     const box=el.querySelector(".vw-img").getBoundingClientRect(); const iw=p.w||img.naturalWidth||4, ih=p.h||img.naturalHeight||3; const s=Math.min((box.width-24)/iw,(box.height-70)/ih); stage.style.width=Math.max(50,iw*s)+"px"; stage.style.height=Math.max(50,ih*s)+"px"; };
   fit(); img.onload=fit; addEventListener("resize",fit,{once:false}); el._fit=fit;
-  const save=()=>DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:p.marks }).catch(e=>toast("Could not save the markup",true));
+  const save=()=>{ DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:p.marks }).then(()=>{ markSaved(); const n=noteCount(); if((w.noteCount||0)!==n){ w.noteCount=n; DB.update(WO_COL+"/"+w.id,{ noteCount:n }); } }).catch(e=>toast("Could not save the markup",true)); };
   const render=()=>{
     let pts=0;
     svg.innerHTML=p.marks.map(m=>{ const sel=m.id===MK.sel?' class="sel"':""; if(m.type==="point"){ pts++; const [x,y]=m.pts[0]; return `<g data-id="${m.id}"${sel}><circle cx="${x}" cy="${y}" r="0.022" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.008" text-anchor="middle" font-size="0.028" font-weight="700" fill="#0B0F1F">${m.n||pts}</text></g>`; }
@@ -1485,7 +1544,7 @@ function setupMarks(el,w,p){
   const mark=()=>{ el.querySelectorAll(".mk").forEach(r=>r.classList.toggle("sel",r.dataset.id===MK.sel)); svg.querySelectorAll("g[data-id]").forEach(g=>g.classList.toggle("sel",g.dataset.id===MK.sel)); };
   const select=(id,quiet)=>{ if(quiet){ MK.sel=id; mark(); return; } MK.sel=MK.sel===id?null:id; mark(); const t=el.querySelector(`.note[data-id="${id}"]`); if(t&&MK.sel===id) t.focus(); };
   // tools
-  const pen=el.querySelector("#mk-pen"); const setPen=on=>{ MK.pen=on; pen.classList.toggle("on",on); svg.classList.toggle("pen",on); };
+  const pen=el.querySelector("#mk-pen"); const setPen=on=>{ MK.pen=on; pen.classList.toggle("on",on); svg.classList.toggle("pen",on); }; setPen(true);
   pen.onclick=()=>setPen(!MK.pen);
   el.querySelectorAll(".swc").forEach(s=>s.onclick=()=>{ MK.color=s.dataset.c; el.querySelectorAll(".swc").forEach(x=>x.classList.toggle("on",x===s)); if(!MK.pen) setPen(true); });
   el.querySelector("#mk-undo").onclick=()=>{ if(!p.marks.length) return; p.marks.pop(); renumber(); MK.sel=null; save(); render(); };
@@ -1498,7 +1557,7 @@ function setupMarks(el,w,p){
   const live=()=>{ let g=el.querySelector("#mk-live"); if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","path"); g.id="mk-live"; svg.append(g); } g.setAttribute("d","M"+drawing.pts.map(q=>q.join(",")).join(" L")); g.setAttribute("fill","none"); g.setAttribute("stroke",drawing.color); g.setAttribute("stroke-width","4"); g.setAttribute("stroke-linecap","round"); g.setAttribute("vector-effect","non-scaling-stroke"); };
   render();
 }
-function closeViewer(){ if(VW?._fit) removeEventListener("resize",VW._fit); VW?.remove(); VW=null; MK.pen=false; highlightPhoto(null); }
+function closeViewer(){ if(VW?._fit) removeEventListener("resize",VW._fit); VW?.remove(); VW=null; highlightPhoto(null); }
 async function savePoseCorrection(woId,p,patch){
   const cur=p.pose?.corrected||{}; const corrected={ ...cur, ...patch, by:S.user.name, t:now() };
   p.pose={ ...(p.pose||{ raw:null, source:"none" }), corrected }; syncPhotoOverlays();
@@ -1532,6 +1591,27 @@ function clearPhotoOverlays(){ Object.values(PHOV).forEach(o=>{ o.m.remove(); o.
 function highlightPhoto(pid){ Object.entries(PHOV).forEach(([id,o])=>{ const hl=id===pid; if(hl!==o.hl){ o.hl=hl; o.sig=""; } }); $$("#gal .th").forEach(t=>t.classList.toggle("hl",t.dataset.pid===pid)); syncPhotoOverlays(); }
 function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGround(p); const h=e.heading??0; const back=offset(e.lat,e.lng,-Math.sin(h*Math.PI/180)*6,-Math.cos(h*Math.PI/180)*6);
   LOCK=null; fly({ center:{ lat:back.lat, lng:back.lng, altitude:g+EYE_H+4 }, range:45, tilt:72, heading:h },1600); }
+
+
+/* ---------- NOTES: one drawing = one note. Derived from the photos' marks, numbered in creation order across the work order. ---------- */
+function allNotes(){ const photosAsc=PH.slice().sort((a,b)=>a.t.localeCompare(b.t)); const out=[]; photosAsc.forEach((p,pi)=>(p.marks||[]).forEach(m=>out.push({ p, m, photoNo:pi+1 }))); out.sort((a,b)=>(a.m.t||"").localeCompare(b.m.t||"")); out.forEach((n,i)=>n.no=i+1); return out; }
+function markSVG(m){ if(m.type==="point"){ const [x,y]=m.pts[0]; return `<circle cx="${x}" cy="${y}" r="0.045" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.016" text-anchor="middle" font-size="0.05" font-weight="700" fill="#0B0F1F">${m.n||""}</text>`; } return `<path d="M${m.pts.map(q=>q.join(",")).join(" L")}" fill="none" stroke="${m.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
+function notesHTML(){
+  const N=allNotes();
+  return `<section class="ps" id="notes"><h3 style="cursor:default">Notes <span class="mono" style="font-weight:400">${N.length}</span></h3>
+    ${N.length?`<div class="notes">${N.map(n=>`<div class="note" data-pid="${n.p.id}" data-mid="${n.m.id}"><div class="nph"><img src="${n.p.thumb}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none">${markSVG(n.m)}</svg><span class="nnum">${n.no}</span></div>
+      <div class="nbody"><textarea class="ntext" data-pid="${n.p.id}" data-mid="${n.m.id}" rows="1" placeholder="Add a note…">${P(n.m.note||"")}</textarea><div class="nmeta"><i style="background:${n.m.color}"></i>${P(n.m.by||n.p.by?.name||"")} · ${P(fmtDate(n.m.t||n.p.t,true))} · Photo ${n.photoNo}${n.m.type==="point"?` · Point ${n.m.n||""}`:""}</div></div></div>`).join("")}</div>`
+    :`<div class="hint">No notes yet. Open a photo and draw on it — every drawing or point becomes a note here.</div>`}</section>`;
+}
+function renderNotes(){ const el=$("#notes"); if(!el) return; el.outerHTML=notesHTML(); wireNotes(); }
+function wireNotes(){
+  const w=W(S.open); if(!w) return;
+  $$("#notes .note").forEach(c=>c.onclick=e=>{ if(e.target.closest("textarea")) return; openViewer(c.dataset.pid,c.dataset.mid); });
+  $$("#notes .ntext").forEach(t=>{ const grow=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; grow(); t.oninput=grow;
+    t.onblur=()=>{ const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:p.marks }).then(()=>markSaved()).catch(()=>toast("Could not save the note",true)); } };
+    t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
+}
+function noteCount(){ return PH.reduce((s,p)=>s+(p.marks?.length||0),0); }
 
 boot();
 </script>
