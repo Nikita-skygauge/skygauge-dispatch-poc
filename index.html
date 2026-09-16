@@ -84,6 +84,8 @@ body.wo-view[data-tab="map"] #pk-exit{display:inline-block!important}
 .it .n{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .it .c{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 .foot{padding:8px 14px 10px;border-top:1px solid var(--line);font-size:11px;color:var(--ink-3);line-height:1.5}
+.reg-cta{padding:10px 12px;border-top:1px solid var(--line);background:var(--panel)}.reg-cta .btn{width:100%;min-height:44px;font-size:14px;font-weight:600}
+.btn.mini{display:none}
 #canvas-wrap{position:relative;min-width:0;min-height:0;background:var(--canvas)}
 gmp-map-3d{position:absolute;inset:0;width:100%;height:100%}
 gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
@@ -236,11 +238,14 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   #view-map{display:block} #canvas-wrap{position:absolute;inset:0}
   /* register = bottom sheet */
   #reg{display:flex;position:absolute;left:0;right:0;bottom:0;height:64px;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.25);z-index:9;transition:height .22s ease;overflow:hidden}
-  #reg.open{height:62vh} #reg .title,#reg .sub,#tree,#reg .foot{display:none} #reg.open .title,#reg.open .sub,#reg.open #tree{display:block} #reg.open .sub{display:flex} #reg.open .foot{display:block}
+  #reg.open{height:62vh} #reg .title,#reg .sub,#tree,#reg .foot,#reg .reg-cta{display:none} #reg.open .title,#reg.open .sub,#reg.open #tree,#reg.open .reg-cta{display:block} #reg.open .sub{display:flex} #reg.open .foot{display:block}
+  #reg .reg-cta{position:sticky;bottom:0} #reg.open .handle .mini{display:none!important}
+  .btn.mini{display:inline-flex!important;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;font-size:22px;font-weight:600;margin-left:auto;margin-right:8px;border-radius:12px}
+  .handle{touch-action:none;user-select:none} #peek .ph{touch-action:pan-x} #reg.dragging,#peek.dragging{transition:none!important}
   #reg .title{padding:6px 14px 8px}
   .handle{display:flex;align-items:center;gap:10px;padding:8px 14px;cursor:pointer;flex:none;font-size:13px;color:var(--ink-2);min-height:48px}
   .handle i{width:38px;height:4px;border-radius:2px;background:var(--line);position:absolute;left:50%;top:8px;transform:translateX(-50%)}
-  .handle b{margin-left:auto;color:var(--ink-3);font-weight:500} #reg.open .handle b{transform:rotate(180deg)}
+  .handle b{color:var(--ink-3);font-weight:500} #reg.open .handle b{transform:rotate(180deg)}
   #reg-sum{padding-top:8px} #reg.open #reg-sum{opacity:.6}
   body.wo-view #reg{display:none}
   /* record = bottom sheet with three heights */
@@ -315,15 +320,16 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
       </div></div>
     </div>
     <aside id="reg">
-      <div class="handle" id="reg-handle"><i></i><span id="reg-sum"></span><b>▴</b></div>
+      <div class="handle" id="reg-handle"><i></i><span id="reg-sum"></span><button class="btn teal mini" id="reg-new-mini" aria-label="New work order">＋</button><b>▴</b></div>
       <div class="title">
         <div class="eyebrow">Site register</div>
         <div class="meta"><b>Extent</b><span id="m-extent">…</span><b>Records</b><span id="m-records">…</span></div>
       </div>
       <div class="sub" role="tablist"><button aria-selected="true" data-sub="wo">Work orders</button><button aria-selected="false" data-sub="assets">Assets</button></div>
       <div id="tree"></div>
+      <div class="reg-cta"><button class="btn primary" id="new-wo-map">＋ New work order</button></div>
       <div class="foot">Standard Google 3D controls: drag to pan · right-drag or Ctrl-drag to rotate and tilt · wheel or pinch to zoom.<br>
-        <button class="link" id="new-wo-map">＋ New work order</button> · <button class="link" id="new-asset">＋ Asset</button> · <button class="link" id="edit-site">Site boundary</button></div>
+        <button class="link" id="new-asset">＋ Asset</button> · <button class="link" id="edit-site">Site boundary</button></div>
     </aside>
     <div id="peek-slot" hidden></div>
   </div>
@@ -1076,12 +1082,25 @@ $("#tree").addEventListener("click",e=>{ const it=e.target.closest(".it"); if(!i
 /* ---------- tabs, search, user menu, admin, export ---------- */
 function setTab(t){ S.tab=t; document.body.dataset.tab=t; $$("#bar [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t)); $("#view-map").hidden=t!=="map"; $("#view-wo").hidden=t!=="wo"; renderAll(); }
 const isMobile=()=>matchMedia("(max-width:860px)").matches;
+let dragMoved=false;
+function dragSheet(handle,sheet,onRelease){
+  let startY=0,startH=0,active=false;
+  handle.addEventListener("pointerdown",e=>{ if(!isMobile()||e.target.closest("button,input")) return; active=true; dragMoved=false; startY=e.clientY; startH=sheet.getBoundingClientRect().height; handle.setPointerCapture(e.pointerId); });
+  handle.addEventListener("pointermove",e=>{ if(!active) return; const dy=startY-e.clientY; if(Math.abs(dy)>6) dragMoved=true; if(!dragMoved) return; sheet.classList.add("dragging"); const h=Math.max(64,Math.min(innerHeight-56,startH+dy)); sheet.style.height=h+"px"; if(sheet.id==="peek"){ document.body.dataset.sheet="drag"; $("#canvas-wrap").style.bottom=h+"px"; } });
+  const end=e=>{ if(!active) return; active=false; const h=sheet.getBoundingClientRect().height; sheet.classList.remove("dragging"); sheet.style.height=""; $("#canvas-wrap").style.bottom=""; if(dragMoved) onRelease(h); setTimeout(()=>{ dragMoved=false; },50); };
+  handle.addEventListener("pointerup",end); handle.addEventListener("pointercancel",end);
+}
 function setSheet(state){ const pk=$("#peek"); pk.dataset.sheet=state; document.body.dataset.sheet=state; if(state==="full") pk.scrollTop=0; }
 function toggleSheet(){ const pk=$("#peek"); const s=pk.dataset.sheet||"half"; setSheet(s==="full"?"half":s==="half"?"full":"half"); }
 function regSummary(){ const open=live().filter(isOpen).length; const el=$("#reg-sum"); if(el) el.textContent=`${live().length} work orders · ${open} open · ${S.assets.length} assets`; }
 function wireUI(){
-  $("#reg-handle").onclick=()=>$("#reg").classList.toggle("open");
-  $("#pk-handle").onclick=toggleSheet; $("#pk-size").onclick=toggleSheet;
+  $("#reg-handle").onclick=e=>{ if(e.target.closest("#reg-new-mini")||dragMoved) return; $("#reg").classList.toggle("open"); };
+  $("#reg-new-mini").onclick=e=>{ e.stopPropagation(); $("#new-wo-map").click(); };
+  $("#pk-handle").onclick=()=>{ if(!dragMoved) toggleSheet(); }; $("#pk-size").onclick=toggleSheet;
+  // drag the sheets up and down; release snaps to the nearest size
+  dragSheet($("#reg-handle"),$("#reg"),h=>{ $("#reg").classList.toggle("open",h>innerHeight*0.28); });
+  dragSheet($("#pk-handle"),$("#peek"),h=>{ const f=h/innerHeight; setSheet(f<0.3?"peek":f<0.78?"half":"full"); });
+  dragSheet($("#peek .ph"),$("#peek"),h=>{ const f=h/innerHeight; setSheet(f<0.3?"peek":f<0.78?"half":"full"); });
   $("#search-toggle").onclick=()=>{ document.body.classList.toggle("search-open"); if(document.body.classList.contains("search-open")) $("#q").focus(); };
   document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&document.body.classList.contains("search-open")&&!S.q){ document.body.classList.remove("search-open"); } });
   $$("#bar [data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
