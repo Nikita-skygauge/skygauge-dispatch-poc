@@ -443,13 +443,15 @@ let DB, AUTH;
 function makeMock(){
   const store=new Map(), subs=new Set();
   const notify=()=>subs.forEach(f=>{ try{ f(); }catch(e){ console.error(e); } });
+  // mirror a Firestore constraint so tests catch it: arrays may not directly contain arrays
+  const chk=(v,inArr)=>{ if(Array.isArray(v)){ if(inArr) throw new Error("Nested arrays are not supported"); v.forEach(x=>chk(x,true)); } else if(v&&typeof v==="object") Object.values(v).forEach(x=>chk(x,false)); };
   const children=col=>[...store.entries()].filter(([k])=>k.startsWith(col+"/")&&!k.slice(col.length+1).includes("/")).map(([k,v])=>({id:k.slice(col.length+1),...structuredClone(v)}));
   const api={
     async get(p){ return store.has(p)?structuredClone(store.get(p)):null; },
-    async set(p,d,merge){ store.set(p, merge&&store.has(p)?{...store.get(p),...structuredClone(d)}:structuredClone(d)); notify(); },
-    async update(p,patch){ const cur=store.get(p)||{}; for(const [k,v] of Object.entries(patch)){ const segs=k.split("."); let o=cur; for(let i=0;i<segs.length-1;i++){ o[segs[i]]??={}; o=o[segs[i]]; } o[segs.at(-1)]=structuredClone(v); } store.set(p,cur); notify(); },
+    async set(p,d,merge){ chk(d); store.set(p, merge&&store.has(p)?{...store.get(p),...structuredClone(d)}:structuredClone(d)); notify(); },
+    async update(p,patch){ chk(patch); const cur=store.get(p)||{}; for(const [k,v] of Object.entries(patch)){ const segs=k.split("."); let o=cur; for(let i=0;i<segs.length-1;i++){ o[segs[i]]??={}; o=o[segs[i]]; } o[segs.at(-1)]=structuredClone(v); } store.set(p,cur); notify(); },
     async del(p){ store.delete(p); [...store.keys()].filter(k=>k.startsWith(p+"/")).forEach(k=>store.delete(k)); notify(); },
-    async add(col,d){ const id=uid(); store.set(col+"/"+id,structuredClone(d)); notify(); return id; },
+    async add(col,d){ chk(d); const id=uid(); store.set(col+"/"+id,structuredClone(d)); notify(); return id; },
     async list(col){ return children(col); },
     watchDoc(p,cb){ const f=()=>cb(store.has(p)?{id:p.split("/").at(-1),...structuredClone(store.get(p))}:null); subs.add(f); f(); return ()=>subs.delete(f); },
     watchCol(col,cb){ const f=()=>cb(children(col)); subs.add(f); f(); return ()=>subs.delete(f); },
@@ -1277,10 +1279,10 @@ function onMapClick(e){
   if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); orbitSync(); }
 }
 /* ---------- location points: add (continuous), move, remove, select ---------- */
-function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } setTab("map"); clearPointHandles();
+function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } if(S.tab!=="map") setTab("map"); clearPointHandles();   // guard: setTab re-renders the record, which would re-enter addPoints
   startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:0, onChange:p=>setPoints(id,p), onDone:p=>{ syncPointHandles(); relock(); }, onCancel:()=>{ syncPointHandles(); relock(); } }); }
 function relock(){ if(S.woView&&S.open&&map){ const w=W(S.open); if(w&&pts(w).length) flyWO(w); } }
-function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } setTab("map"); selPt=i; syncPointHandles();
+function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } if(S.tab!=="map") setTab("map"); selPt=i; syncPointHandles();
   V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); orbitSync(); setMode("place",`Point ${i+1}`,`${isMobile()?"Tap":"Click"} the model where point <b>${i+1}</b> should be.`,true); }
 function selectPoint(i){ selPt=selPt===i?null:i; syncPointHandles(); if(S.open) renderRecord(); const w=W(S.open); if(selPt!=null&&w){ const p=pts(w)[selPt]; if(p&&map){ fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } } }
 /* numbered handles for the open record's points; click → select, then Move / Remove in the mode bar */
@@ -1373,9 +1375,12 @@ let PH=[], phUnsub=null, phWO=null;               // photos of the open record
 const PHOV={};                                     // photo overlays on the model: pid → {m, wedge}
 const fullCache=new Map();
 
+/* Firestore rejects nested arrays, so mark points travel as a flat [x0,y0,x1,y1,…] list and live in memory as [[x,y],…]. */
+function packMarks(marks){ return (marks||[]).map(m=>({ ...m, pts:(m.pts||[]).flat() })); }
+function unpackMarks(p){ (p.marks||[]).forEach(m=>{ if(m.pts?.length&&typeof m.pts[0]==="number"){ const q=[]; for(let i=0;i+1<m.pts.length;i+=2) q.push([m.pts[i],m.pts[i+1]]); m.pts=q; } }); return p; }
 function watchPhotos(id){
   if(phWO===id) return; phUnsub?.(); PH=[]; phWO=id; clearPhotoOverlays();
-  phUnsub=DB.watchCol(WO_COL+"/"+id+"/photos",rows=>{ PH=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id){ renderGallery(); syncPhotoOverlays(); } });
+  phUnsub=DB.watchCol(WO_COL+"/"+id+"/photos",rows=>{ rows.forEach(unpackMarks); PH=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id){ renderGallery(); syncPhotoOverlays(); } });
 }
 function stopPhotos(){ phUnsub?.(); phUnsub=null; PH=[]; phWO=null; clearPhotoOverlays(); }
 const effPose = p => p.pose?.corrected ? { ...p.pose.raw, ...p.pose.corrected } : (p.pose?.raw||null);
@@ -1528,7 +1533,7 @@ function setupMarks(el,w,p){
   const fit=()=>{ // size the stage to the rendered image box so normalized coords line up
     const box=el.querySelector(".vw-img").getBoundingClientRect(); const iw=p.w||img.naturalWidth||4, ih=p.h||img.naturalHeight||3; const s=Math.min((box.width-24)/iw,(box.height-70)/ih); stage.style.width=Math.max(50,iw*s)+"px"; stage.style.height=Math.max(50,ih*s)+"px"; };
   fit(); img.onload=fit; addEventListener("resize",fit,{once:false}); el._fit=fit;
-  const save=()=>{ DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:p.marks }).then(()=>{ markSaved(); const n=noteCount(); if((w.noteCount||0)!==n){ w.noteCount=n; DB.update(WO_COL+"/"+w.id,{ noteCount:n }); } }).catch(e=>toast("Could not save the markup",true)); };
+  const save=()=>{ DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) }).then(()=>{ markSaved(); const n=noteCount(); if((w.noteCount||0)!==n){ w.noteCount=n; DB.update(WO_COL+"/"+w.id,{ noteCount:n }); } }).catch(e=>toast("Could not save the markup",true)); };
   const render=()=>{
     let pts=0;
     svg.innerHTML=p.marks.map(m=>{ const sel=m.id===MK.sel?' class="sel"':""; if(m.type==="point"){ pts++; const [x,y]=m.pts[0]; return `<g data-id="${m.id}"${sel}><circle cx="${x}" cy="${y}" r="0.022" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.008" text-anchor="middle" font-size="0.028" font-weight="700" fill="#0B0F1F">${m.n||pts}</text></g>`; }
@@ -1608,7 +1613,7 @@ function wireNotes(){
   const w=W(S.open); if(!w) return;
   $$("#notes .note").forEach(c=>c.onclick=e=>{ if(e.target.closest("textarea")) return; openViewer(c.dataset.pid,c.dataset.mid); });
   $$("#notes .ntext").forEach(t=>{ const grow=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; grow(); t.oninput=grow;
-    t.onblur=()=>{ const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:p.marks }).then(()=>markSaved()).catch(()=>toast("Could not save the note",true)); } };
+    t.onblur=()=>{ const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) }).then(()=>markSaved()).catch(()=>toast("Could not save the note",true)); } };
     t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
 }
 function noteCount(){ return PH.reduce((s,p)=>s+(p.marks?.length||0),0); }
