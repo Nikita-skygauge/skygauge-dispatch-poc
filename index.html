@@ -31,6 +31,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .btn.sm{padding:4px 9px;font-size:11.5px}.btn.arm{border-color:#FF6A00;color:#FF6A00}.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.danger{color:var(--crit);border-color:var(--crit)}
 .btn.save{background:var(--panel-2);color:var(--ink-3);border-color:var(--line);transition:all .25s}.btn.save.pend{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.save.err{background:var(--crit);color:#fff;border-color:var(--crit)}.btn.save.off{background:var(--warn);color:#fff;border-color:var(--warn)}
+#bar-save{font-size:12px;white-space:nowrap}@media (max-width:860px){#bar-save{display:none}}
+.okflash{position:fixed;z-index:10050;pointer-events:none;font:600 11px/1 var(--sans,system-ui);padding:5px 8px;border-radius:999px;background:#0B0F1F;color:#fff;box-shadow:var(--shadow);opacity:.85;transition:opacity .35s,transform .35s;transform:translateY(0)}
+.okflash.ok{background:var(--ok)}.okflash.bad{background:var(--crit)}.okflash.hide{opacity:0;transform:translateY(-6px)}
+#vw-save{font-size:11px}
 .ptlist{display:flex;flex-direction:column;gap:3px}.ptrow{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;cursor:pointer}.ptrow:hover{background:var(--panel)}.ptrow.sel{outline:2px solid var(--sel)}.ptrow .mono{flex:1;font-size:12px}
 .ptn{width:20px;height:20px;border-radius:50%;background:#FF6A00;color:#fff;font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .btn.teal{background:#00FFE5;border-color:#00FFE5;color:#0B0F1F;font-weight:600}.btn.teal:hover{filter:brightness(1.08);background:#00FFE5}.btn.teal:disabled{background:var(--panel-2);border-color:var(--line);color:var(--ink-3)}
@@ -325,6 +330,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
   </div>
   <div id="search"><input id="q" type="search" placeholder="Search work orders…" autocomplete="off" aria-label="Search"></div>
   <button class="btn" id="search-toggle" aria-label="Search" hidden>🔍</button>
+  <button class="btn save savestate" id="bar-save" title="Changes save automatically">Saved ✓</button>
   <button id="userbtn" title="Account"><span class="avatar" id="uav">?</span><span id="uname">…</span></button>
 </div>
 <div id="offline" hidden>Offline — changes will sync when the connection returns</div>
@@ -375,7 +381,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
 
   <aside id="peek" aria-label="Work order">
     <div class="handle" id="pk-handle"><i></i></div>
-    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" title="Changes save automatically">Saved ✓</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-size" hidden aria-label="Expand or collapse">▴</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
+    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save savestate" id="pk-save" title="Changes save automatically">Saved ✓</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-size" hidden aria-label="Expand or collapse">▴</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
     <div id="pbody"></div>
   </aside>
 </div>
@@ -444,7 +450,7 @@ function makeMock(){
   const store=new Map(), subs=new Set();
   const notify=()=>subs.forEach(f=>{ try{ f(); }catch(e){ console.error(e); } });
   // mirror a Firestore constraint so tests catch it: arrays may not directly contain arrays
-  const chk=(v,inArr)=>{ if(Array.isArray(v)){ if(inArr) throw new Error("Nested arrays are not supported"); v.forEach(x=>chk(x,true)); } else if(v&&typeof v==="object") Object.values(v).forEach(x=>chk(x,false)); };
+  const chk=(v,inArr)=>{ if(!inArr&&window.__failWrites>0){ window.__failWrites--; throw new Error("Simulated write failure"); } if(v===undefined) throw new Error("Unsupported field value: undefined"); if(Array.isArray(v)){ if(inArr) throw new Error("Nested arrays are not supported"); v.forEach(x=>chk(x,true)); } else if(v&&typeof v==="object") Object.values(v).forEach(x=>chk(x,false)); };
   const children=col=>[...store.entries()].filter(([k])=>k.startsWith(col+"/")&&!k.slice(col.length+1).includes("/")).map(([k,v])=>({id:k.slice(col.length+1),...structuredClone(v)}));
   const api={
     async get(p){ return store.has(p)?structuredClone(store.get(p)):null; },
@@ -520,7 +526,7 @@ async function sendLink(){
 
 async function boot(){
   if(MOCK){
-    DB=makeMock(); window.DB=DB;   // exposed for the headless test harness only
+    DB=trackDB(makeMock()); window.DB=DB;   // exposed for the headless test harness only
     AUTH={ google:async()=>{}, sendLink:async()=>{}, signOut:async()=>location.reload() };
     await enter({ uid:"mock-admin", email:ADMIN_EMAIL, displayName:"Nikita (mock)", emailVerified:true });
     return;
@@ -533,7 +539,7 @@ async function boot(){
   const app=A.initializeApp(FIREBASE);
   const auth=U.getAuth(app);
   let db; try{ db=F.initializeFirestore(app,{ localCache:F.persistentLocalCache({ tabManager:F.persistentMultipleTabManager() }) }); }catch{ db=F.getFirestore(app); }
-  DB=makeFirestore(F,db);
+  DB=trackDB(makeFirestore(F,db));
   AUTH={
     google:()=>U.signInWithPopup(auth,new U.GoogleAuthProvider()),
     sendLink:em=>U.sendSignInLinkToEmail(auth,em,{ url:location.origin+location.pathname, handleCodeInApp:true }),
@@ -545,7 +551,7 @@ async function boot(){
     try{ await U.signInWithEmailLink(auth,em,location.href); history.replaceState(null,"",location.pathname); }
     catch(e){ showGate("signin",e.message||String(e)); return; }
   }
-  window.addEventListener("online",()=>$("#offline").hidden=true); window.addEventListener("offline",()=>$("#offline").hidden=false);
+  window.addEventListener("online",()=>{ $("#offline").hidden=true; renderSave(); if(SAVE.failed.length) retryFailed(); }); window.addEventListener("offline",()=>{ $("#offline").hidden=false; renderSave(); });
   U.onAuthStateChanged(auth,u=>{ if(!u){ teardown(); showGate("signin"); } else enter(u); });
 }
 function teardown(){ S.unsub.forEach(f=>f()); S.unsub=[]; }
@@ -638,19 +644,19 @@ async function createWO(init={}){
 }
 function log(id,text){ return DB.add(WO_COL+"/"+id+"/activity",{ t:now(), by:userRef(), text }).catch(console.error); }
 function stamp(){ return { edited:now(), editedBy:userRef() }; }
-async function setTitle(id,title){ const w=W(id); if(!w||w.title===title) return; w.title=title; markSaved(); await DB.update(WO_COL+"/"+id,{ title, ...stamp() }); log(id,`renamed to “${title||"Untitled"}”`); }
+async function setTitle(id,title){ const w=W(id); if(!w||w.title===title) return; w.title=title; await flashSaved("#ptitle",()=>DB.update(WO_COL+"/"+id,{ title, ...stamp() })); log(id,`renamed to “${title||"Untitled"}”`); }
 async function setStatus(id,sid){
   const w=W(id); if(!w||w.statusId===sid) return; const from=status(w.statusId)?.name, to=status(sid)?.name;
   const patch={ statusId:sid, ...stamp() };
   const wasDone=isDone(w), nowDone=status(sid)?.group==="complete";
   if(nowDone&&!wasDone) patch.completedAt=now(); if(!nowDone&&wasDone) patch.completedAt=null;
-  Object.assign(w,patch); refreshWOOverlay(w); renderAll(); markSaved();
-  await DB.update(WO_COL+"/"+id,patch); log(id,`changed Status from ${from} to ${to}`);
+  Object.assign(w,patch); refreshWOOverlay(w); renderAll();
+  await flashSaved($("#pbody [data-status]")||$(`#views tr[data-id="${id}"] [data-pid="status"]`),()=>DB.update(WO_COL+"/"+id,patch)); log(id,`changed Status from ${from} to ${to}`);
 }
 async function setValue(id,pid,v){
   const w=W(id); if(!w) return; const p=prop(pid); if(!p) return;
-  const before=describe(p,w.values?.[pid]); w.values??={}; w.values[pid]=v; renderAll(); markSaved();
-  await DB.update(WO_COL+"/"+id,{ ["values."+pid]:v, ...stamp() });
+  const before=describe(p,w.values?.[pid]); w.values??={}; w.values[pid]=v; renderAll();
+  await flashSaved($(`#pbody .pv[data-edit="${pid}"]`)||$(`#views tr[data-id="${id}"] [data-pid="${pid}"]`),()=>DB.update(WO_COL+"/"+id,{ ["values."+pid]:v, ...stamp() }));
   const after=describe(p,v); if(before!==after) log(id,`set ${p.name} to ${after||"empty"}${before?` (was ${before})`:""}`);
 }
 /* Location = ordered points. 1 → pin, 2 → line, 3+ → area (height m). Legacy pin/area docs are read through pts(). */
@@ -658,19 +664,52 @@ function pts(w){ const l=w?.location||{}; if(l.points) return l.points; if(l.are
 const locHeight = w => w?.location?.height ?? w?.location?.areaHeight ?? 10;
 const locKind = n => n===0?"none":n===1?"pin":n===2?"line":"area";
 function locAnchor(w){ const p=pts(w); if(!p.length) return null; if(p.length===1) return p[0]; const c=centroid(p); const g=p.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?Math.round(g.reduce((a,b)=>a+b,0)/g.length):undefined, alt:p[0].alt||0 }; }
-async function setPoints(id,points,height){
+async function setPoints(id,points,height,quiet){   // quiet: continuous placement — the caller logs one summary line when done
   const w=W(id); if(!w) return; const before=pts(w).length;
   w.location={ points:points.map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}), ...(p.alt?{alt:p.alt}:{}) })), height:height??locHeight(w) };
-  refreshWOOverlay(w,true); syncPointHandles(); renderAll(); markSaved();
-  await DB.update(WO_COL+"/"+id,{ location:w.location, ...stamp() });
+  refreshWOOverlay(w,true); syncPointHandles(); renderAll();
+  await flashSaved($("#pbody .locbox")||$("#pbody .ptlist"),()=>DB.update(WO_COL+"/"+id,{ location:w.location, ...stamp() }));
+  if(quiet||w.draft) return;
   const n=points.length; log(id, n===0?"cleared the location":before===0?`set the location (${locKind(n)}${n>2?", "+n+" corners":""})`:`changed the location (${locKind(n)}${n>2?", "+n+" corners":""})`);
 }
-/* Cosmetic Save button (V-save): writes are automatic; the button appears on change, reads Saved ✓, then fades. */
-let saveT=null;
-function markSaved(){ const b=$("#pk-save"); if(!b) return; clearTimeout(saveT); b.textContent="Save changes"; b.classList.add("pend"); saveT=setTimeout(()=>{ b.textContent="Saved ✓"; b.classList.remove("pend"); },900); }
+/* ---------- Save tracker: every write goes through here, so the status reflects the server, not a timer ----------
+   Saving… while any write is in flight · Saved ✓ · just now once all settle · Couldn't save · Retry on any rejection. */
+const SAVE={ pending:0, failed:[], last:null, timer:null };
+function trackDB(api){ for(const k of ["set","update","add","del"]){ const f=api[k].bind(api); api[k]=(...a)=>runWrite(()=>f(...a),a[0]); } return api; }
+function runWrite(thunk,path){
+  SAVE.pending++; renderSave(); let p; try{ p=Promise.resolve(thunk()); }catch(e){ p=Promise.reject(e); }
+  return p.then(r=>{ SAVE.pending--; SAVE.last=Date.now(); renderSave(); return r; },
+                e=>{ SAVE.pending--; SAVE.failed.push({ thunk, path, err:e }); renderSave(); toast(`Couldn't save ${whatIs(path)} — ${e?.message||e}`,true); throw e; });
+}
+function whatIs(path){ path=String(path||""); if(/\/photofull\//.test(path)) return "the photo"; if(/\/photos\//.test(path)) return "the photo markup"; if(/\/activity/.test(path)) return "the activity entry"; if(/workorders\/[^/]+$/.test(path)) return "the work order"; if(/assets/.test(path)) return "the asset"; if(/schema/.test(path)) return "the properties"; return "the change"; }
+// a failed write is already reported via the status chip + toast; keep it out of the console as an "uncaught" error
+window.addEventListener("unhandledrejection",e=>{ if(SAVE.failed.some(f=>f.err===e.reason)||/Simulated write failure/.test(String(e.reason?.message))) e.preventDefault(); });
+async function retryFailed(){ const q=SAVE.failed.splice(0); renderSave(); for(const f of q){ try{ await runWrite(f.thunk,f.path); }catch{} } if(!SAVE.failed.length) toast("Everything is saved."); }
+function ago(t){ const s=Math.round((Date.now()-t)/1000); if(s<5) return "just now"; if(s<60) return s+" s ago"; const m=Math.round(s/60); if(m<60) return m+" min ago"; return Math.round(m/60)+" h ago"; }
+function saveState(){
+  const n=SAVE.failed.length; if(n) return { cls:["err"], txt:"Couldn't save · Retry", title:`${n} change${n===1?"":"s"} not saved — click to retry` };
+  if(SAVE.pending) return navigator.onLine===false?{ cls:["pend","off"], txt:"Saved on this device · syncs when online", title:"You are offline; changes are kept here and sent when the connection returns" }:{ cls:["pend"], txt:"Saving…", title:"Sending to the server" };
+  if(!SAVE.last) return { cls:[], txt:"Saved ✓", title:"All changes save automatically" };
+  return { cls:[], txt:"Saved ✓ · "+ago(SAVE.last), title:"All changes are on the server" };
+}
+function renderSave(){
+  const st=saveState(); $$(".savestate").forEach(b=>{ b.textContent=st.txt; b.classList.remove("pend","err","off"); st.cls.forEach(c=>b.classList.add(c)); b.title=st.title; });
+  clearTimeout(SAVE.timer); if(!SAVE.pending&&!SAVE.failed.length&&SAVE.last) SAVE.timer=setTimeout(renderSave, Date.now()-SAVE.last<60000?5000:60000);
+}
+function saveClick(){ if(SAVE.failed.length) retryFailed(); else toast(SAVE.pending?"Still saving…":"All changes are saved automatically."); }
+function markSaved(){ renderSave(); }
+/* Inline confirmation beside the thing that was just changed: Saving… → ✓ Saved (fades) or ✗ Not saved (stays longer). */
+function flashSaved(el,run){   // run: a function that starts the write — the anchor is measured BEFORE the write, since the snapshot it triggers re-renders the panel
+  if(typeof el==="string") el=$(el); const r=el?.getBoundingClientRect?.(); const promise=typeof run==="function"?run():run;
+  if(!r||!r.width) return promise;
+  const tag=document.createElement("span"); tag.className="okflash"; tag.textContent="Saving…"; document.body.append(tag);
+  const place=b=>{ tag.style.left=Math.max(8,Math.min(innerWidth-tag.offsetWidth-8,b.right-tag.offsetWidth))+"px"; tag.style.top=Math.max(8,b.top-tag.offsetHeight-4)+"px"; }; place(r);
+  const done=ok=>{ if(el.isConnected) place(el.getBoundingClientRect()); tag.textContent=ok?"✓ Saved":"✗ Not saved"; tag.classList.add(ok?"ok":"bad","show"); setTimeout(()=>{ tag.classList.add("hide"); setTimeout(()=>tag.remove(),400); }, ok?1400:4000); };
+  Promise.resolve(promise).then(()=>done(true),()=>done(false)); return promise;
+}
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
-async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m.remove(); o.area?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
+async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m?.remove(); o.area?.remove(); o.line?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
 function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); const dcut=Date.now()-86400000; S.wos.filter(w=>w.draft&&S.creating!==w.id&&w.createdBy?.uid===S.user.uid&&new Date(w.created)<dcut).forEach(w=>purgeWO(w.id)); }
 async function duplicateWO(id){ const w=W(id); if(!w) return; const nid=await createWO({ title:(w.title||"Untitled")+" (copy)", statusId:w.statusId, values:structuredClone(w.values||{}), location:structuredClone(w.location) }); openWO(nid); }
 async function saveSchema(){ S.schema.version=(S.schema.version||1); await DB.set("workspace/schema",S.schema); renderAll(); }
@@ -700,7 +739,7 @@ function toast(html,bad){ $(".toast")?.remove(); const t=document.createElement(
    POPOVERS
    ===================================================================== */
 let POP=null;
-function closePop(){ if(POP){ POP.onclose?.(); POP.remove(); POP=null; } }
+function closePop(){ if(!POP) return; const p=POP; POP=null; p.onclose?.(); p.remove(); if(POP===p) POP=null; }
 function openPop(anchor, html, opts={}){
   closePop();
   const el=document.createElement("div"); el.className="pop"; el.innerHTML=html; if(opts.width) el.style.minWidth=opts.width+"px";
@@ -711,7 +750,7 @@ function openPop(anchor, html, opts={}){
   return el;
 }
 document.addEventListener("pointerdown",e=>{ if(POP&&!POP.contains(e.target)) closePop(); },true);
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(POP){ closePop(); e.stopPropagation(); return; } if($("#cam")){ closeCamera(); return; } if(VW){ closeViewer(); return; } if(V.draw){ $("#mode-exit").click(); return; } if(S.open&&!S.woView) closePeek(); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(POP){ closePop(); e.stopPropagation(); return; } if($("#cam")){ closeCamera(); return; } if(VW){ closeViewer(); return; } if(S.creating){ cancelCreate(); return; } if(V.draw){ $("#mode-exit").click(); return; } if(S.open&&!S.woView) closePeek(); } });
 
 /* =====================================================================
    VALUE RENDERERS (record page, table cell, board card)
@@ -783,7 +822,7 @@ function optionPicker(p,w,anchor,onPick){
     inp.oninput=()=>{ q=inp.value; draw(); };
     inp.onkeydown=e=>{ if(e.key==="Enter"){ const c=el.querySelector("[data-create]"); if(c) c.click(); else el.querySelector(".mi[data-id]")?.click(); } if(e.key==="Backspace"&&!q&&multi&&cur.length){ pick(cur.at(-1)); } };
     el.querySelectorAll(".x[data-rm]").forEach(x=>x.onclick=e=>{ e.stopPropagation(); pick(x.dataset.rm); });
-    el.querySelectorAll(".mi[data-id]").forEach(m=>m.onclick=e=>{ if(e.target.dataset.edit){ e.stopPropagation(); optionEditor(p,e.target.dataset.edit,m,()=>draw()); return; } pick(m.dataset.id); });
+    el.querySelectorAll(".mi[data-id]").forEach(m=>m.onclick=e=>{ if(e.target.dataset.edit){ e.stopPropagation(); optionEditor(p,e.target.dataset.edit,m,()=>{ setTimeout(()=>{ document.body.append(el); POP=el; draw(); },0); }); return; } pick(m.dataset.id); });
     el.querySelector("[data-create]")?.addEventListener("click",async()=>{ const o={id:uid(),name:q.trim(),color:COLORS[(p.options?.length||0)%9+1]}; (p.options??=[]).push(o); q=""; await saveSchema(); pick(o.id); });
     // drag reorder of options (V15)
     let dragId=null; el.querySelectorAll(".mi[data-id]").forEach(m=>{ const g=m.querySelector(".grab"); g.ondragstart=e=>{ dragId=m.dataset.id; e.dataTransfer.effectAllowed="move"; }; m.ondragover=e=>e.preventDefault(); m.ondrop=e=>{ e.preventDefault(); if(!dragId||dragId===m.dataset.id) return; const a=p.options; const from=a.findIndex(o=>o.id===dragId), to=a.findIndex(o=>o.id===m.dataset.id); a.splice(to,0,a.splice(from,1)[0]); saveSchema().then(draw); }; });
@@ -824,7 +863,7 @@ function datePicker(p,w,anchor){
 function personPicker(p,w,anchor){
   const el=openPop(anchor,"",{width:300}); let q="";
   const draw=()=>{
-    const cur=w.values?.[p.id]||[];
+    const cur=(W(w.id)||w).values?.[p.id]||[];
     const ms=S.members.filter(m=>!q||(m.name+" "+m.email).toLowerCase().includes(q.toLowerCase()));
     const isEmail=/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(q.trim());
     el.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 0">${cur.map((x,i)=>`<span class="pill" style="background:var(--panel-2)">${personHTML(x)}<span class="x" data-rm="${i}">✕</span></span>`).join("")}</div>
@@ -843,7 +882,7 @@ function personPicker(p,w,anchor){
 function assetPicker(p,w,anchor){
   const el=openPop(anchor,"",{width:300}); let q="";
   const draw=()=>{
-    const cur=w.values?.[p.id]||[];
+    const cur=(W(w.id)||w).values?.[p.id]||[];
     const as=S.assets.filter(a=>!q||(a.tag+" "+a.name).toLowerCase().includes(q.toLowerCase()));
     el.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:4px;padding:4px 8px 0">${cur.map(t=>`<span class="pill mono" style="background:var(--steel-2);color:var(--ink)">${P(t)}<span class="x" data-rm="${P(t)}">✕</span></span>`).join("")}</div>
       <input class="pin" placeholder="Search assets by tag or name…" value="${P(q)}"><div class="sec">Asset register</div>
@@ -853,7 +892,7 @@ function assetPicker(p,w,anchor){
     const set=nv=>{ setValue(w.id,p.id,nv); draw(); };
     el.querySelectorAll("[data-rm]").forEach(x=>x.onclick=()=>set(cur.filter(t=>t!==x.dataset.rm)));
     el.querySelectorAll("[data-tag]").forEach(m=>m.onclick=()=>{ const t=m.dataset.tag; set(cur.includes(t)?cur.filter(x=>x!==t):[...cur,t]); });
-    el.querySelector("[data-newasset]").onclick=()=>{ const tag=q.trim().toUpperCase(); assetEditor(null,anchor,{ tag, onCreate:t=>{ const c=w.values?.[p.id]||[]; if(!c.includes(t)) setValue(w.id,p.id,[...c,t]); } }); };
+    el.querySelector("[data-newasset]").onclick=()=>{ const tag=q.trim().toUpperCase(); assetEditor(null,anchor,{ tag, onCreate:t=>{ const c=(W(w.id)||w).values?.[p.id]||[]; if(!c.includes(t)) setValue(w.id,p.id,[...c,t]); } }); };
   };
   draw();
 }
@@ -882,7 +921,7 @@ function propertyMenu(p,anchor,view){
   inp.onkeydown=e=>{ if(e.key==="Enter"){ commit(); closePop(); } }; el.onclose=commit;
   el.querySelector("[data-type]").onclick=()=>typeChanger(p,anchor);
   el.querySelector("[data-opts]")?.addEventListener("click",()=>optionsEditor(p,anchor));
-  el.querySelector("[data-fmt]")?.addEventListener("click",()=>{ const f=p.format||{}; const e2=openPop(anchor,`<div class="fr"><label>Unit</label><input type="text" id="f-u" value="${P(f.unit||"")}" style="width:100px"></div><div class="fr"><label>Decimals</label><input type="number" id="f-d" min="0" max="3" value="${f.decimals??""}" style="width:70px"></div>`,{width:220}); e2.onclose=()=>{ p.format={ unit:e2.querySelector("#f-u").value.trim(), decimals:e2.querySelector("#f-d").value===""?undefined:Math.max(0,Math.min(3,+e2.querySelector("#f-d").value)) }; saveSchema(); }; });
+  el.querySelector("[data-fmt]")?.addEventListener("click",()=>{ const f=p.format||{}; const e2=openPop(anchor,`<div class="fr"><label>Unit</label><input type="text" id="f-u" value="${P(f.unit||"")}" style="width:100px"></div><div class="fr"><label>Decimals</label><input type="number" id="f-d" min="0" max="3" value="${f.decimals??""}" style="width:70px"></div>`,{width:220}); e2.onclose=()=>{ const dv=e2.querySelector("#f-d").value; p.format={ unit:e2.querySelector("#f-u").value.trim(), ...(dv===""?{}:{ decimals:Math.max(0,Math.min(3,+dv)) }) }; saveSchema(); }; });
   el.querySelector("[data-img]")?.addEventListener("click",()=>{ p.imagesOnly=!p.imagesOnly; saveSchema(); closePop(); });
   el.querySelector("[data-mult]")?.addEventListener("click",()=>{ p.multiple=p.multiple===false; saveSchema(); closePop(); });
   el.querySelector("[data-hide]")?.addEventListener("click",()=>{ S.hidden[view].add(p.id); saveView(); renderAll(); closePop(); });
@@ -959,14 +998,19 @@ function statusOptionEditor(oid,anchor,after){
 let actUnsub=null, ACT=[], showEmpty=false, showAct=false, selPt=null;
 function openWO(id,fly){
   const w=W(id); if(!w) return;
+  if(S.creating&&S.creating!==id){ cancelCreate(); }   // opening another record abandons the unfinished draft
   if(S.open!==id){ showEmpty=false; showAct=false; actUnsub?.(); ACT=[]; actUnsub=DB.watchCol(WO_COL+"/"+id+"/activity",rows=>{ ACT=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id) renderActivity(); }); }
   if(S.open!==id){ selPt=null; if(isMobile()) setSheet("half"); } S.open=id; watchPhotos(id); $("#peek").classList.add("on"); $("#reg").classList.remove("open"); renderRecord(); highlightCard(id); syncPointHandles();
   if(fly&&map) flyWO(w);
 }
 function closePeek(){ closeViewer(); stopPhotos(); clearPointHandles(); S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
 function highlightCard(id){ $$(".kcard.hl").forEach(c=>c.classList.remove("hl")); if(id){ const c=document.querySelector(`.kcard[data-id="${id}"]`); if(c){ c.classList.add("hl"); c.scrollIntoView({block:"nearest"}); } } }
+let lastRendered=null;
 function renderRecord(){
   const w=W(S.open); if(!w){ closePeek(); return; }
+  // a snapshot (another user's edit, our own noteCount write…) must not wipe a field the user is typing in
+  const ae=document.activeElement; if(lastRendered===w.id&&ae&&/^(INPUT|TEXTAREA)$/.test(ae.tagName)&&$("#pbody")?.contains(ae)){ if(!ae._rerender){ ae._rerender=true; ae.addEventListener("blur",()=>setTimeout(()=>{ if(S.open===w.id) renderRecord(); },0),{once:true}); } return; }
+  lastRendered=w.id;
   if(S.creating===w.id){ renderCreate(w); return; }
   $("#pk-id").textContent=w.id+(w.trashed?" · in Trash":"");
   const filled=props().filter(p=>p.system||!isEmpty(w.values?.[p.id])), empty=props().filter(p=>!p.system&&isEmpty(w.values?.[p.id]));
@@ -1154,17 +1198,17 @@ function wireUI(){
   dragSheet($("#peek .ph"),$("#peek"),h=>{ const f=h/innerHeight; setSheet(f<0.3?"peek":f<0.78?"half":"full"); });
   $("#search-toggle").onclick=()=>{ document.body.classList.toggle("search-open"); if(document.body.classList.contains("search-open")) $("#q").focus(); };
   document.addEventListener("keydown",e=>{ if(e.key==="Escape"&&document.body.classList.contains("search-open")&&!S.q){ document.body.classList.remove("search-open"); } });
-  $$("#bar [data-tab]").forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+  $$("#bar [data-tab]").forEach(b=>b.onclick=()=>{ if(S.creating&&b.dataset.tab!=="map") cancelCreate(); setTab(b.dataset.tab); });
   $$("#reg .sub button").forEach(b=>b.onclick=()=>{ S.sub=b.dataset.sub; $$("#reg .sub button").forEach(x=>x.setAttribute("aria-selected",x===b)); renderTree(); });
   $$("#viewsw button").forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; saveView(); renderViews(); });
   $("#q").oninput=e=>{ S.q=e.target.value; renderAll(); };
-  $("#b-new").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); };
+  $("#b-new").onclick=async()=>{ let id; try{ id=await createWO(); }catch(e){ toast("Couldn't create a work order — "+(navigator.onLine===false?"you are offline.":(e.message||e)),true); return; } const w=W(id); if(w) w._focusTitle=true; openWO(id); };
   $("#new-wo-map").onclick=()=>startCreate();
   $("#b-props").onclick=e=>propsToggle(e.currentTarget);
   $("#b-export").onclick=exportJSON;
   $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w) enterWOView(w.id); };
   $("#site-view").onclick=exitWOView; $("#pk-exit").onclick=()=>{ if(S.creating) cancelCreate(); else exitWOView(); };
-  $("#pk-save").onclick=()=>{ const b=$("#pk-save"); clearTimeout(saveT); b.textContent="Saved ✓"; b.classList.remove("pend"); toast("All changes are saved automatically."); };
+  $("#pk-save").onclick=saveClick; $("#bar-save").onclick=saveClick; renderSave();
   $("#userbtn").onclick=e=>userMenu(e.currentTarget);
   $("#new-asset").onclick=e=>assetEditor(null,e.currentTarget);
   document.addEventListener("pointerdown",e=>{ // click outside the peek closes it (V11) — not on popovers, map or toolbar buttons
@@ -1222,11 +1266,12 @@ function getKey(){ const q=PARAMS.get("key"); if(q){ try{ localStorage.setItem(L
 function showMapGate(err){ $("#mapgate").hidden=false; $("#keyErr").textContent=err||""; $("#loading").hidden=true; $("#mapgate .box").classList.toggle("member",!S.admin); }
 window.gm_authFailure=()=>showMapGate("Google rejected this key. Check Maps JavaScript API is enabled, billing is on, and the key's website restriction includes "+location.origin);
 function loadGoogle(key){ (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src=`https://maps.${c}apis.com/maps/api/js?`+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({ key, v:"beta" }); }
+let mapInit=false;
 async function initMap(){
-  if(map) return;
-  const key=getKey(); if(!key){ showMapGate(); return; }
+  if(map||mapInit) return; mapInit=true;
+  const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
-  try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); }catch(e){ showMapGate("Could not load Google Maps: "+(e.message||e)); return; }
+  try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); }catch(e){ mapInit=false; showMapGate("Could not load Google Maps: "+(e.message||e)); return; }
   const cam=siteCam(), g=siteGeom();
   map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", gestureHandling:"GREEDY", defaultUIDisabled:true });   // no Google on-screen buttons (zoom/pan/tilt/compass); gestures only   // GREEDY = plain Google Maps gestures: scroll zooms without a modifier key, one-finger drag pans. AUTO falls back to "cooperative" (⌘+scroll) in some layouts.
   map.addEventListener("gmp-error",e=>showMapGate("Map error: "+(e.detail?.message||"see console")));
@@ -1256,7 +1301,8 @@ function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o)
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
-function fly(cam,ms=1800){ if(!map) return; flying=true; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); clearTimeout(flyT); flyT=setTimeout(()=>{ flying=false; },ms+150); map.addEventListener("gmp-animationend",()=>{ flying=false; },{once:true}); }
+let flyTok=0; function onFlyEnd(fn){ const tok=++flyTok; const h=()=>{ map.removeEventListener("gmp-animationend",h); if(tok===flyTok) fn(); }; map.addEventListener("gmp-animationend",h); }
+function fly(cam,ms=1800){ if(!map) return; flying=true; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); clearTimeout(flyT); flyT=setTimeout(()=>{ flying=false; },ms+150); onFlyEnd(()=>{ flying=false; }); }
 const GROUND_FALLBACK=80; // m above sea level at the Dofasco works when a pin has no recorded ground elevation
 function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
   const a=locAnchor(w); const ground=(a.ground??GROUND_FALLBACK), alt=ground+(a.alt||0)+(P.length>=3?locHeight(w)/2:P.length===1?6:2);
@@ -1264,10 +1310,10 @@ function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
   const r=P.length===1?110:Math.max(100,ext*1.8);
   const cam={ center:{lat:a.lat,lng:a.lng,altitude:alt}, range:r, tilt:62, heading:map.heading??-30 };
   flying=true; LOCK=S.woView?{ ...cam.center }:null; orbitSync(); map.flyCameraTo({ endCamera:cam, durationMillis:1600 });
-  clearTimeout(flyT); const done=()=>{ flying=false; if(S.woView&&S.open===w.id){ const c=map.center; const off=c?Math.hypot((c.lat-cam.center.lat)*111320,(c.lng-cam.center.lng)*111320*Math.cos(cam.center.lat*Math.PI/180)):1e9; if(off>25||Math.abs((map.range||0)-cam.range)>cam.range*0.5){ map.center=cam.center; map.range=cam.range; map.tilt=cam.tilt; map.heading=cam.heading; } } orbitSync(); }; flyT=setTimeout(done,1750); map.addEventListener("gmp-animationend",done,{once:true});
+  clearTimeout(flyT); const done=()=>{ flying=false; if(S.woView&&S.open===w.id){ const c=map.center; const off=c?Math.hypot((c.lat-cam.center.lat)*111320,(c.lng-cam.center.lng)*111320*Math.cos(cam.center.lat*Math.PI/180)):1e9; if(off>25||Math.abs((map.range||0)-cam.range)>cam.range*0.5){ map.center=cam.center; map.range=cam.range; map.tilt=cam.tilt; map.heading=cam.heading; } } orbitSync(); }; const tok0=flyTok+1; flyT=setTimeout(()=>{ if(tok0===flyTok) done(); },1750); onFlyEnd(done);
 }
 $$("#hud [data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view, g=siteGeom(); if(v==="site") fly(siteCam()); if(v==="north") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*0.95, tilt:60, heading:170 }); if(v==="plan") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*1.05, tilt:0, heading:0 }); });
-$("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 }),{once:true}); };
+$("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); onFlyEnd(()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 })); };
 
 /* ---------- mode bar, placing and drawing ---------- */
 function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; if(isMobile()&&S.open){ if(cls==="draw"||cls==="place") setSheet("peek"); else if($("#peek").dataset.sheet==="peek") setSheet("half"); } md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
@@ -1280,7 +1326,8 @@ function onMapClick(e){
 }
 /* ---------- location points: add (continuous), move, remove, select ---------- */
 function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } if(S.tab!=="map") setTab("map"); clearPointHandles();   // guard: setTab re-renders the record, which would re-enter addPoints
-  startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:0, onChange:p=>setPoints(id,p), onDone:p=>{ syncPointHandles(); relock(); }, onCancel:()=>{ syncPointHandles(); relock(); } }); }
+  const before=pts(w).length;
+  startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:0, onChange:p=>setPoints(id,p,undefined,true), onDone:p=>{ syncPointHandles(); relock(); const n=p.length; if(!w.draft&&n!==before) log(id, n===0?"cleared the location":before===0?`set the location (${locKind(n)}${n>2?", "+n+" corners":""})`:`changed the location (${locKind(n)}${n>2?", "+n+" corners":""})`); }, onCancel:()=>{ syncPointHandles(); relock(); } }); }
 function relock(){ if(S.woView&&S.open&&map){ const w=W(S.open); if(w&&pts(w).length) flyWO(w); } }
 function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } if(S.tab!=="map") setTab("map"); selPt=i; syncPointHandles();
   V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); orbitSync(); setMode("place",`Point ${i+1}`,`${isMobile()?"Tap":"Click"} the model where point <b>${i+1}</b> should be.`,true); }
@@ -1292,7 +1339,7 @@ function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw
   P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:{lat:p.lat,lng:p.lng,altitude:P.length===1?(p.alt||0)+0.5:1}, altitudeMode:"RELATIVE_TO_GROUND", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate(selPt===i?"#00FFE5":"#FF6A00",0.7).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
   if(selPt!=null&&!V.placing){ setMode("place",`Point ${selPt+1} of ${P.length}`,`<button class="btn sm" id="pt-move">Move</button> <button class="btn sm danger" id="pt-rm">Remove</button>`,true); $("#pt-move").onclick=()=>movePoint(w.id,selPt); $("#pt-rm").onclick=()=>{ const Q=P.slice(); Q.splice(selPt,1); selPt=null; setPoints(w.id,Q); resetMode(); }; }
   else if(!V.placing) resetMode(); }
-function startDraw(kind,opts){ clearDraw(); $("#orbit").hidden=true; V.draw={ kind, pts:(opts.initial||[]).map(p=>({lat:p.lat,lng:p.lng,ground:p.ground,alt:p.alt})), height:opts.height||0, min:opts.min??3, onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
+function startDraw(kind,opts){ clearDraw(); $("#orbit").hidden=true; V.draw={ kind, pts:(opts.initial||[]).map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}), ...(p.alt?{alt:p.alt}:{}) })), height:opts.height||0, min:opts.min??3, onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   d.pts.forEach((p,i)=>{ const m=new lib.Marker3DElement({ position:{lat:p.lat,lng:p.lng,altitude:2}, altitudeMode:"RELATIVE_TO_MESH", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate("#FF6A00",0.8).tpl); map.append(m); OV.draw.push(m); });
@@ -1352,13 +1399,14 @@ function installLock(){ return;
 
 /* ---------- Creation flow: location first, then Create Work Order ---------- */
 async function startCreate(){
-  const id=await createWO({ draft:true }); S.creating=id; document.body.classList.add("creating");
+  if(S.creating){ if(isMobile()) setSheet("half"); return; }   // already creating: just bring the panel back
+  let id; try{ id=await createWO({ draft:true }); }catch(e){ toast("Couldn't start a work order — "+(navigator.onLine===false?"you are offline.":(e.message||e)),true); return; } S.creating=id; document.body.classList.add("creating");
   enterWOView(id); if(map) addPoints(id); else toast("The map is not loaded — points can be added once it is.",true); if(isMobile()) setSheet("half");
 }
 async function finishCreate(){
   const id=S.creating; const w=W(id); if(!w) return; if(!pts(w).length){ toast("Add at least one point first.",true); return; }
   clearDraw(); S.creating=null; document.body.classList.remove("creating"); w.draft=false; w._focusTitle=true;
-  await DB.update(WO_COL+"/"+id,{ draft:false, ...stamp() }); log(id,"created the work order");
+  await DB.update(WO_COL+"/"+id,{ draft:false, ...stamp() }); const n=pts(w).length; log(id,`created the work order · ${locKind(n)}${n>2?" with "+n+" corners":""}`);
   refreshWOOverlay(w,true); syncPointHandles(); renderAll(); woMode(); if(map) flyWO(w); setTimeout(()=>$("#ptitle")?.focus(),50);
 }
 async function cancelCreate(){
@@ -1444,7 +1492,7 @@ async function openCamera(woId){
     <div class="cam-bar"><button class="btn" id="cam-x">Cancel</button><button id="cam-shoot" aria-label="Take photo"></button><span style="width:70px"></span></div>`;
   document.body.append(el);
   startSensors();
-  try{ camStream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:"environment" }, width:{ ideal:2560 }, height:{ ideal:1920 } }, audio:false }); el.querySelector("video").srcObject=camStream; }
+  try{ camStream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:"environment" }, width:{ ideal:2560 }, height:{ ideal:1920 } }, audio:false }); if(!el.isConnected){ camStream.getTracks().forEach(t=>t.stop()); camStream=null; return; } el.querySelector("video").srcObject=camStream; }
   catch(e){ toast("Camera not available: "+(e.message||e),true); closeCamera(); return; }
   el.querySelector("#cam-x").onclick=closeCamera;
   el.querySelector("#cam-shoot").onclick=async()=>{
@@ -1470,7 +1518,7 @@ async function addPhoto(woId, fileOrBlob, pose){
   try{ await DB.set(WO_COL+"/"+woId+"/photofull/"+pid,{ data:img.data }); await DB.set(WO_COL+"/"+woId+"/photos/"+pid,meta); }
   catch(e){ toast("Upload failed: "+(e.message||e),true); return; }
   log(woId,`added a photo${pose.source==="sensor"?" with position and heading":pose.source==="exif"?" with EXIF position":""}`);
-  const n=(w.values?.photos||[]); if(prop("photos")) setValue(woId,"photos",[...n,{ id:pid, name:meta.name, bytes:meta.bytes }]);
+  const n=(W(woId)?.values?.photos||[]); if(prop("photos")) setValue(woId,"photos",[...n,{ id:pid, name:meta.name, bytes:meta.bytes }]);
   toast("Photo added"+(pose.source==="none"?" — position unknown":""));
 }
 async function deletePhoto(woId,pid){
@@ -1505,7 +1553,7 @@ async function openViewer(pid,markId){
   const w=W(S.open); const p=PH.find(x=>x.id===pid); if(!w||!p) return;
   closeViewer(); highlightPhoto(pid); MK.sel=markId||null; MK.pen=true;
   const el=document.createElement("div"); el.id="viewer"; VW=el;
-  el.innerHTML=`<div class="vw-top"><span class="mono">${P(w.id)} · ${P(fmtDate(p.t,true))} · ${P(p.by?.name||"")}</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn sm" id="vw-prev">‹</button><button class="btn sm" id="vw-next">›</button><button class="btn sm" id="vw-x">✕</button></span></div>
+  el.innerHTML=`<div class="vw-top"><span class="mono">${P(w.id)} · ${P(fmtDate(p.t,true))} · ${P(p.by?.name||"")}</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center"><button class="btn sm save savestate" id="vw-save" title="Changes save automatically">Saved ✓</button><button class="btn sm" id="vw-prev">‹</button><button class="btn sm" id="vw-next">›</button><button class="btn sm" id="vw-x">✕</button></span></div>
     <div class="vw-img"><div class="vw-stage"><img src="${p.thumb}" id="vw-full" alt="" draggable="false"><svg id="vw-svg" viewBox="0 0 1 1" preserveAspectRatio="none"></svg></div>
       <div class="vw-tools"><button class="btn sm tool on" id="mk-pen" title="Draw or tap to mark">✎ Mark</button>${MARK_COLORS.map(c=>`<span class="swc ${c===MK.color?"on":""}" data-c="${c}" style="background:${c}"></span>`).join("")}<button class="btn sm" id="mk-undo" title="Remove last mark">↶</button></div></div>
     <div class="vw-side">
@@ -1519,9 +1567,9 @@ async function openViewer(pid,markId){
   el.querySelector("#vw-x").onclick=closeViewer;
   el.querySelector("#vw-prev").onclick=()=>{ const n=PH[(idx-1+PH.length)%PH.length]; if(n) openViewer(n.id); };
   el.querySelector("#vw-next").onclick=()=>{ const n=PH[(idx+1)%PH.length]; if(n) openViewer(n.id); };
-  const cap=el.querySelector("#vw-cap"); cap.onblur=()=>{ if(cap.value.trim()!==(p.caption||"")) DB.update(WO_COL+"/"+w.id+"/photos/"+pid,{ caption:cap.value.trim() }); }; cap.onkeydown=ev=>{ if(ev.key==="Enter") cap.blur(); };
+  const cap=el.querySelector("#vw-cap"); cap.onblur=()=>{ if(cap.value.trim()!==(p.caption||"")){ p.caption=cap.value.trim(); flashSaved(cap,()=>DB.update(WO_COL+"/"+w.id+"/photos/"+pid,{ caption:p.caption })); log(w.id,`captioned photo ${photoNo(p)} “${p.caption.slice(0,60)}”`); } }; cap.onkeydown=ev=>{ if(ev.key==="Enter") cap.blur(); };
   el.querySelector("#vw-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } closeViewer(); setTab("map"); V.placing={ onPlace:pt=>{ savePoseCorrection(w.id,p,{ lat:pt.lat, lng:pt.lng, ground:pt.ground }); openViewer(pid); } }; map.classList.add("placing"); orbitSync(); setMode("place","Move photo",`${isMobile()?"Tap":"Click"} the model where this photo was taken.`,true); };
-  el.querySelector("#vw-fly").onclick=()=>{ setTab("map"); flyPhoto(p); };
+  el.querySelector("#vw-fly").onclick=()=>{ closeViewer(); setTab("map"); flyPhoto(p); };
   el.querySelector("#vw-del").onclick=()=>deletePhoto(w.id,pid);
   setupMarks(el,w,p);
   if(markId){ const row=el.querySelector(`.mk[data-id="${markId}"]`); row?.scrollIntoView({block:"nearest"}); }
@@ -1533,7 +1581,7 @@ function setupMarks(el,w,p){
   const fit=()=>{ // size the stage to the rendered image box so normalized coords line up
     const box=el.querySelector(".vw-img").getBoundingClientRect(); const iw=p.w||img.naturalWidth||4, ih=p.h||img.naturalHeight||3; const s=Math.min((box.width-24)/iw,(box.height-70)/ih); stage.style.width=Math.max(50,iw*s)+"px"; stage.style.height=Math.max(50,ih*s)+"px"; };
   fit(); img.onload=fit; addEventListener("resize",fit,{once:false}); el._fit=fit;
-  const save=()=>{ DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) }).then(()=>{ markSaved(); const n=noteCount(); if((w.noteCount||0)!==n){ w.noteCount=n; DB.update(WO_COL+"/"+w.id,{ noteCount:n }); } }).catch(e=>toast("Could not save the markup",true)); };
+  const save=(anchorId)=>{ const anchor=(anchorId&&el.querySelector(`.mk[data-id="${anchorId}"]`))||el.querySelector("#mk-list"); return flashSaved(anchor,()=>DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) })).then(()=>{ markSaved(); const n=noteCount(); if((w.noteCount||0)!==n){ w.noteCount=n; DB.update(WO_COL+"/"+w.id,{ noteCount:n }); } }).catch(e=>toast("Could not save the markup",true)); };
   const render=()=>{
     let pts=0;
     svg.innerHTML=p.marks.map(m=>{ const sel=m.id===MK.sel?' class="sel"':""; if(m.type==="point"){ pts++; const [x,y]=m.pts[0]; return `<g data-id="${m.id}"${sel}><circle cx="${x}" cy="${y}" r="0.022" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.008" text-anchor="middle" font-size="0.028" font-weight="700" fill="#0B0F1F">${m.n||pts}</text></g>`; }
@@ -1542,8 +1590,8 @@ function setupMarks(el,w,p){
     const list=el.querySelector("#mk-list"); let n=0;
     list.innerHTML=`<div class="eyebrow" style="margin-bottom:4px">Marks · ${p.marks.length}</div>`+(p.marks.length?p.marks.map(m=>{ if(m.type==="point") n++; return `<div class="mk ${m.id===MK.sel?"sel":""}" data-id="${m.id}"><span class="dot" style="background:${m.color}">${m.type==="point"?(m.n||n):""}</span><textarea class="in note" data-id="${m.id}" rows="1" placeholder="${m.type==="point"?"Note for point "+(m.n||n):"Note for this mark"}…">${P(m.note||"")}</textarea><button class="x" data-rm="${m.id}" title="Remove">✕</button></div>`; }).join(""):`<div class="hint">Tap <b>✎ Mark</b>, then draw on the photo or tap a spot to drop a numbered point. Each mark gets a note here.</div>`);
     list.querySelectorAll(".mk").forEach(r=>r.onclick=e=>{ if(e.target.closest("textarea,button")) return; select(r.dataset.id); });
-    list.querySelectorAll(".note").forEach(t=>{ const grow=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; grow(); t.oninput=grow; t.onfocus=()=>select(t.dataset.id,true); t.onblur=()=>{ const m=p.marks.find(x=>x.id===t.dataset.id); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); save(); } }; t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
-    list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); p.marks=p.marks.filter(m=>m.id!==b.dataset.rm); renumber(); save(); render(); });
+    list.querySelectorAll(".note").forEach(t=>{ const grow=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; grow(); t.oninput=grow; t.onfocus=()=>select(t.dataset.id,true); t.onblur=()=>{ const m=p.marks.find(x=>x.id===t.dataset.id); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); save(m.id); logNote(w.id,p,m,"wrote"); } }; t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
+    list.querySelectorAll("[data-rm]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const gone=p.marks.find(m=>m.id===b.dataset.rm); p.marks=p.marks.filter(m=>m.id!==b.dataset.rm); renumber(); save(); render(); if(gone) log(w.id,`removed a ${gone.type==="point"?"point":"drawing"} note on photo ${photoNo(p)}`); });
   };
   const renumber=()=>{ let n=0; p.marks.forEach(m=>{ if(m.type==="point") m.n=++n; }); };
   const mark=()=>{ el.querySelectorAll(".mk").forEach(r=>r.classList.toggle("sel",r.dataset.id===MK.sel)); svg.querySelectorAll("g[data-id]").forEach(g=>g.classList.toggle("sel",g.dataset.id===MK.sel)); };
@@ -1552,15 +1600,15 @@ function setupMarks(el,w,p){
   const pen=el.querySelector("#mk-pen"); const setPen=on=>{ MK.pen=on; pen.classList.toggle("on",on); svg.classList.toggle("pen",on); }; setPen(true);
   pen.onclick=()=>setPen(!MK.pen);
   el.querySelectorAll(".swc").forEach(s=>s.onclick=()=>{ MK.color=s.dataset.c; el.querySelectorAll(".swc").forEach(x=>x.classList.toggle("on",x===s)); if(!MK.pen) setPen(true); });
-  el.querySelector("#mk-undo").onclick=()=>{ if(!p.marks.length) return; p.marks.pop(); renumber(); MK.sel=null; save(); render(); };
+  el.querySelector("#mk-undo").onclick=()=>{ if(!p.marks.length) return; const gone=p.marks.pop(); renumber(); MK.sel=null; save(); render(); log(w.id,`removed a ${gone.type==="point"?"point":"drawing"} note on photo ${photoNo(p)}`); };
   // drawing
   let drawing=null; const norm=e=>{ const r=svg.getBoundingClientRect(); return [ +Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)).toFixed(4), +Math.max(0,Math.min(1,(e.clientY-r.top)/r.height)).toFixed(4) ]; };
-  svg.addEventListener("pointerdown",e=>{ if(!MK.pen||e.button>0) return; e.preventDefault(); svg.setPointerCapture(e.pointerId); const q=norm(e); drawing={ id:uid(), type:"stroke", color:MK.color, pts:[q], note:"", by:S.user.name, t:now(), moved:false }; live(); });
+  svg.addEventListener("pointerdown",e=>{ if(!MK.pen||e.button>0||e.target.closest("g[data-id]")) return; e.preventDefault(); svg.setPointerCapture(e.pointerId); const q=norm(e); drawing={ id:uid(), type:"stroke", color:MK.color, pts:[q], note:"", by:S.user.name, t:now(), moved:false }; live(); });
   svg.addEventListener("pointermove",e=>{ if(!drawing) return; const q=norm(e); const last=drawing.pts.at(-1); if(Math.hypot(q[0]-last[0],q[1]-last[1])<0.003) return; drawing.pts.push(q); drawing.moved=true; live(); });
-  const finish=e=>{ if(!drawing) return; const d=drawing; drawing=null; el.querySelector("#mk-live")?.remove(); if(!d.moved||d.pts.length<3){ d.type="point"; d.pts=[d.pts[0]]; } delete d.moved; p.marks.push(d); renumber(); MK.sel=d.id; save(); render(); const t=el.querySelector(`.note[data-id="${d.id}"]`); if(t&&!isMobile()) t.focus(); };
+  const finish=e=>{ if(!drawing) return; const d=drawing; drawing=null; el.querySelector("#mk-live")?.remove(); if(!d.moved||d.pts.length<3){ d.type="point"; d.pts=[d.pts[0]]; } delete d.moved; p.marks.push(d); renumber(); MK.sel=d.id; save(d.id); render(); log(w.id,`added a ${d.type==="point"?"point":"drawing"} note on photo ${photoNo(p)}`); const t=el.querySelector(`.note[data-id="${d.id}"]`); if(t&&!isMobile()) t.focus(); };
   svg.addEventListener("pointerup",finish); svg.addEventListener("pointercancel",finish);
   const live=()=>{ let g=el.querySelector("#mk-live"); if(!g){ g=document.createElementNS("http://www.w3.org/2000/svg","path"); g.id="mk-live"; svg.append(g); } g.setAttribute("d","M"+drawing.pts.map(q=>q.join(",")).join(" L")); g.setAttribute("fill","none"); g.setAttribute("stroke",drawing.color); g.setAttribute("stroke-width","4"); g.setAttribute("stroke-linecap","round"); g.setAttribute("vector-effect","non-scaling-stroke"); };
-  render();
+  render(); renderSave();
 }
 function closeViewer(){ if(VW?._fit) removeEventListener("resize",VW._fit); VW?.remove(); VW=null; highlightPhoto(null); }
 async function savePoseCorrection(woId,p,patch){
@@ -1613,9 +1661,11 @@ function wireNotes(){
   const w=W(S.open); if(!w) return;
   $$("#notes .note").forEach(c=>c.onclick=e=>{ if(e.target.closest("textarea")) return; openViewer(c.dataset.pid,c.dataset.mid); });
   $$("#notes .ntext").forEach(t=>{ const grow=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; grow(); t.oninput=grow;
-    t.onblur=()=>{ const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) }).then(()=>markSaved()).catch(()=>toast("Could not save the note",true)); } };
+    t.onblur=()=>{ const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); flashSaved(t,()=>DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) })).then(()=>markSaved()).catch(()=>{}); logNote(w.id,p,m,"wrote"); } };
     t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
 }
+function photoNo(p){ const asc=PH.slice().sort((a,b)=>a.t.localeCompare(b.t)); const i=asc.findIndex(x=>x.id===p.id); return i<0?"":i+1; }
+function logNote(woId,p,m,verb){ const txt=(m.note||"").trim(); log(woId, txt?`${verb} a note on photo ${photoNo(p)}: “${txt.slice(0,80)}${txt.length>80?"…":""}”`:`cleared a note on photo ${photoNo(p)}`); }
 function noteCount(){ return PH.reduce((s,p)=>s+(p.marks?.length||0),0); }
 
 boot();
