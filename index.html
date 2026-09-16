@@ -298,7 +298,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   </div>
 
   <aside id="peek" aria-label="Work order">
-    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" hidden title="Changes save automatically">Save</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
+    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" title="Changes save automatically">Saved ✓</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
     <div id="pbody"></div>
   </aside>
 </div>
@@ -602,7 +602,7 @@ async function setPoints(id,points,height){
 }
 /* Cosmetic Save button (V-save): writes are automatic; the button appears on change, reads Saved ✓, then fades. */
 let saveT=null;
-function markSaved(){ const b=$("#pk-save"); if(!b) return; clearTimeout(saveT); b.hidden=false; b.textContent="Save"; b.classList.add("pend"); saveT=setTimeout(()=>{ b.textContent="Saved ✓"; b.classList.remove("pend"); saveT=setTimeout(()=>{ b.hidden=true; },2200); },900); }
+function markSaved(){ const b=$("#pk-save"); if(!b) return; clearTimeout(saveT); b.textContent="Save changes"; b.classList.add("pend"); saveT=setTimeout(()=>{ b.textContent="Saved ✓"; b.classList.remove("pend"); },900); }
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
 async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m.remove(); o.area?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
@@ -1056,6 +1056,7 @@ function wireUI(){
   $("#b-export").onclick=exportJSON;
   $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w) enterWOView(w.id); };
   $("#site-view").onclick=exitWOView; $("#pk-exit").onclick=exitWOView;
+  $("#pk-save").onclick=()=>{ const b=$("#pk-save"); clearTimeout(saveT); b.textContent="Saved ✓"; b.classList.remove("pend"); toast("All changes are saved automatically."); };
   $("#userbtn").onclick=e=>userMenu(e.currentTarget);
   $("#new-asset").onclick=e=>assetEditor(null,e.currentTarget);
   document.addEventListener("pointerdown",e=>{ // click outside the peek closes it (V11) — not on popovers, map or toolbar buttons
@@ -1234,7 +1235,7 @@ function assetEditor(a,anchor,opts={}){
    input itself: drag → heading/tilt, wheel/pinch → range, centre never changes. Lifted while placing or drawing points. */
 let LOCK=null, flying=false, flyT=null;
 function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); if(map){ flyWO(w); } woMode(); orbitSync(); }
-function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); if(map) fly(siteCam(),1500); }
+function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
 function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",`<b>${w.id}</b> · drag to rotate · wheel or pinch to zoom · <em>Exit Work Order</em> is at the top of the panel`,false); }
 function orbitSync(){ const on=S.woView&&!!LOCK&&!V.draw&&!V.placing; $("#orbit").hidden=!on; }
 function installLock(){
