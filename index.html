@@ -30,6 +30,9 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}.btn.primary:hover{filter:brightness(1.08)}
 .btn.sm{padding:4px 9px;font-size:11.5px}.btn.arm{border-color:#FF6A00;color:#FF6A00}.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.save{background:var(--panel-2);color:var(--ink-3);border-color:var(--line);transition:all .25s}.btn.save.pend{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.ptlist{display:flex;flex-direction:column;gap:3px}.ptrow{display:flex;align-items:center;gap:8px;padding:3px 6px;border-radius:6px;cursor:pointer}.ptrow:hover{background:var(--panel)}.ptrow.sel{outline:2px solid var(--sel)}.ptrow .mono{flex:1;font-size:12px}
+.ptn{width:20px;height:20px;border-radius:50%;background:#FF6A00;color:#fff;font-size:11px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex:none}
 .btn.teal{background:#00FFE5;border-color:#00FFE5;color:#0B0F1F;font-weight:600}.btn.teal:hover{filter:brightness(1.08);background:#00FFE5}.btn.teal:disabled{background:var(--panel-2);border-color:var(--line);color:var(--ink-3)}
 .link{color:var(--accent);cursor:pointer;background:none;border:0;padding:0;font:inherit;font-weight:500}
 .hint{color:var(--ink-3);font-size:12.5px}
@@ -283,7 +286,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   </div>
 
   <aside id="peek" aria-label="Work order">
-    <div class="ph"><span class="id" id="pk-id"></span><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
+    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" hidden title="Changes save automatically">Save</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
     <div id="pbody"></div>
   </aside>
 </div>
@@ -439,7 +442,7 @@ async function sendLink(){
 
 async function boot(){
   if(MOCK){
-    DB=makeMock();
+    DB=makeMock(); window.DB=DB;   // exposed for the headless test harness only
     AUTH={ google:async()=>{}, sendLink:async()=>{}, signOut:async()=>location.reload() };
     await enter({ uid:"mock-admin", email:ADMIN_EMAIL, displayName:"Nikita (mock)", emailVerified:true });
     return;
@@ -551,29 +554,43 @@ async function createWO(init={}){
   const seq=await DB.nextSeq(); const yy=String(new Date().getFullYear()).slice(-2);
   const id=`WO-${yy}-${String(seq).padStart(3,"0")}`;
   const st=init.statusId||defaultStatus("todo")?.id;
-  const w={ seq, title:init.title||"", statusId:st, values:init.values||{}, location:init.location||{pin:null,area:null,areaHeight:10}, created:now(), createdBy:userRef(), edited:now(), editedBy:userRef(), trashed:false, completedAt:status(st)?.group==="complete"?now():null };
+  const w={ seq, title:init.title||"", statusId:st, values:init.values||{}, location:init.location||{points:[],height:10}, created:now(), createdBy:userRef(), edited:now(), editedBy:userRef(), trashed:false, completedAt:status(st)?.group==="complete"?now():null };
   await DB.set(WO_COL+"/"+id,w);
   log(id,"created the work order");
   return id;
 }
 function log(id,text){ return DB.add(WO_COL+"/"+id+"/activity",{ t:now(), by:userRef(), text }).catch(console.error); }
 function stamp(){ return { edited:now(), editedBy:userRef() }; }
-async function setTitle(id,title){ const w=W(id); if(!w||w.title===title) return; w.title=title; await DB.update(WO_COL+"/"+id,{ title, ...stamp() }); log(id,`renamed to “${title||"Untitled"}”`); }
+async function setTitle(id,title){ const w=W(id); if(!w||w.title===title) return; w.title=title; markSaved(); await DB.update(WO_COL+"/"+id,{ title, ...stamp() }); log(id,`renamed to “${title||"Untitled"}”`); }
 async function setStatus(id,sid){
   const w=W(id); if(!w||w.statusId===sid) return; const from=status(w.statusId)?.name, to=status(sid)?.name;
   const patch={ statusId:sid, ...stamp() };
   const wasDone=isDone(w), nowDone=status(sid)?.group==="complete";
   if(nowDone&&!wasDone) patch.completedAt=now(); if(!nowDone&&wasDone) patch.completedAt=null;
-  Object.assign(w,patch); refreshWOOverlay(w); renderAll();
+  Object.assign(w,patch); refreshWOOverlay(w); renderAll(); markSaved();
   await DB.update(WO_COL+"/"+id,patch); log(id,`changed Status from ${from} to ${to}`);
 }
 async function setValue(id,pid,v){
   const w=W(id); if(!w) return; const p=prop(pid); if(!p) return;
-  const before=describe(p,w.values?.[pid]); w.values??={}; w.values[pid]=v; renderAll();
+  const before=describe(p,w.values?.[pid]); w.values??={}; w.values[pid]=v; renderAll(); markSaved();
   await DB.update(WO_COL+"/"+id,{ ["values."+pid]:v, ...stamp() });
   const after=describe(p,v); if(before!==after) log(id,`set ${p.name} to ${after||"empty"}${before?` (was ${before})`:""}`);
 }
-async function setLocation(id,loc){ const w=W(id); if(!w) return; w.location={...w.location,...loc}; refreshWOOverlay(w,true); renderAll(); await DB.update(WO_COL+"/"+id,{ location:w.location, ...stamp() }); log(id, loc.pin!==undefined&&loc.area===undefined?"moved the pin":"changed the work area"); }
+/* Location = ordered points. 1 → pin, 2 → line, 3+ → area (height m). Legacy pin/area docs are read through pts(). */
+function pts(w){ const l=w?.location||{}; if(l.points) return l.points; if(l.area?.length) return l.area.map(p=>({lat:p.lat,lng:p.lng,ground:p.ground??l.areaGround})); if(l.pin) return [{ lat:l.pin.lat, lng:l.pin.lng, ground:l.pin.ground, alt:l.pin.alt }]; return []; }
+const locHeight = w => w?.location?.height ?? w?.location?.areaHeight ?? 10;
+const locKind = n => n===0?"none":n===1?"pin":n===2?"line":"area";
+function locAnchor(w){ const p=pts(w); if(!p.length) return null; if(p.length===1) return p[0]; const c=centroid(p); const g=p.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?Math.round(g.reduce((a,b)=>a+b,0)/g.length):undefined, alt:p[0].alt||0 }; }
+async function setPoints(id,points,height){
+  const w=W(id); if(!w) return; const before=pts(w).length;
+  w.location={ points:points.map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}), ...(p.alt?{alt:p.alt}:{}) })), height:height??locHeight(w) };
+  refreshWOOverlay(w,true); syncPointHandles(); renderAll(); markSaved();
+  await DB.update(WO_COL+"/"+id,{ location:w.location, ...stamp() });
+  const n=points.length; log(id, n===0?"cleared the location":before===0?`set the location (${locKind(n)}${n>2?", "+n+" corners":""})`:`changed the location (${locKind(n)}${n>2?", "+n+" corners":""})`);
+}
+/* Cosmetic Save button (V-save): writes are automatic; the button appears on change, reads Saved ✓, then fades. */
+let saveT=null;
+function markSaved(){ const b=$("#pk-save"); if(!b) return; clearTimeout(saveT); b.hidden=false; b.textContent="Save"; b.classList.add("pend"); saveT=setTimeout(()=>{ b.textContent="Saved ✓"; b.classList.remove("pend"); saveT=setTimeout(()=>{ b.hidden=true; },2200); },900); }
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id) closePeek(); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
 async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m.remove(); o.area?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
@@ -862,21 +879,21 @@ function statusOptionEditor(oid,anchor,after){
 /* =====================================================================
    RECORD PAGE (side peek)
    ===================================================================== */
-let actUnsub=null, ACT=[], showEmpty=false, showAct=false;
+let actUnsub=null, ACT=[], showEmpty=false, showAct=false, selPt=null;
 function openWO(id,fly){
   const w=W(id); if(!w) return;
   if(S.open!==id){ showEmpty=false; showAct=false; actUnsub?.(); ACT=[]; actUnsub=DB.watchCol(WO_COL+"/"+id+"/activity",rows=>{ ACT=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id) renderActivity(); }); }
-  S.open=id; watchPhotos(id); $("#peek").classList.add("on"); renderRecord(); highlightCard(id);
+  if(S.open!==id) selPt=null; S.open=id; watchPhotos(id); $("#peek").classList.add("on"); renderRecord(); highlightCard(id); syncPointHandles();
   if(fly&&map) flyWO(w);
 }
-function closePeek(){ closeViewer(); stopPhotos(); S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
+function closePeek(){ closeViewer(); stopPhotos(); clearPointHandles(); S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
 function highlightCard(id){ $$(".kcard.hl").forEach(c=>c.classList.remove("hl")); if(id){ const c=document.querySelector(`.kcard[data-id="${id}"]`); if(c){ c.classList.add("hl"); c.scrollIntoView({block:"nearest"}); } } }
 function renderRecord(){
   const w=W(S.open); if(!w){ closePeek(); return; }
   $("#pk-id").textContent=w.id+(w.trashed?" · in Trash":"");
   const filled=props().filter(p=>p.system||!isEmpty(w.values?.[p.id])), empty=props().filter(p=>!p.system&&isEmpty(w.values?.[p.id]));
   const rowHTML=p=>`<div class="prop" data-pid="${p.id}" draggable="true"><div class="pn" title="${P(p.name)} · ${TYPE_LABEL[p.type]}">${ico(p.type)}<span style="overflow:hidden;text-overflow:ellipsis">${P(p.name)}</span></div><div class="pv ${p.system?"ro":""}" data-edit="${p.id}">${renderValue(p,w.values?.[p.id],w)}</div></div>`;
-  const loc=w.location||{};
+  const P0=pts(w);
   $("#pbody").innerHTML=`
     <textarea class="ptitle" id="ptitle" rows="1" placeholder="Untitled">${P(w.title||"")}</textarea>
     <div class="props">
@@ -886,11 +903,12 @@ function renderRecord(){
       ${showEmpty?empty.map(rowHTML).join(""):""}
       <div class="addprop" id="add-prop">＋ Add a property</div>
     </div>
-    <section class="ps"><h3>Location</h3><div class="locbox">
-      <div class="r"><b>Pin</b>${loc.pin?`<span class="mono">${loc.pin.lat.toFixed(5)}, ${loc.pin.lng.toFixed(5)} · alt ${Math.round(loc.pin.alt||0)} m</span>`:`<span class="hint">not placed</span>`}</div>
-      <div class="r"><b>Area</b>${loc.area?.length?`<span class="mono">${loc.area.length} corners · ${loc.areaHeight||10} m high</span>`:`<span class="hint">none</span>`}</div>
-      <div class="acts"><button class="btn sm" id="l-pin">${loc.pin?"Move pin":"Place pin"}</button><button class="btn sm" id="l-area">${loc.area?.length?"Redraw area":"Draw area"}</button>${loc.area?.length?`<button class="btn sm" id="l-noarea">Remove area</button>`:""}<button class="btn sm teal" id="l-fly" ${loc.pin||loc.area?"":"disabled"}>Fly to</button>
-      <label class="hint" style="display:flex;align-items:center;gap:4px;margin-left:auto">Alt <input class="in mono" id="l-alt" type="number" value="${Math.round(loc.pin?.alt||0)}" style="width:64px;padding:2px 6px"> m</label></div>
+    <section class="ps"><h3 style="cursor:default">Location <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${P({none:"— click the model to place points",pin:"Pin",line:"Line",area:"Area · "+P0.length+" corners"}[locKind(P0.length)])}</span></h3><div class="locbox">
+      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${selPt===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">One point makes a pin, two make a line, three or more make an area. Points can be moved or removed at any time.</div>`}
+      <div class="acts"><button class="btn sm ${P0.length?"":"primary"}" id="l-add">＋ Add point${P0.length?"s":""}</button>
+      ${P0.length>=3?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="1" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}
+      ${P0.length===1?`<label class="hint" style="display:flex;align-items:center;gap:4px">Pin alt <input class="in mono" id="l-alt" type="number" value="${Math.round(P0[0].alt||0)}" style="width:64px;padding:2px 6px"> m</label>`:""}
+      <button class="btn sm teal" id="l-fly" ${P0.length?"":"disabled"} style="margin-left:auto">Fly to</button></div>
     </div></section>
     ${galleryHTML()}
     <section class="ps"><h3 style="cursor:default">Documents</h3><div class="fileblock">Document uploads (PDFs, reports) wait on Firebase Storage — a billing decision. Photos work now.</div></section>
@@ -908,9 +926,13 @@ function renderRecord(){
   $("#toggle-empty")?.addEventListener("click",()=>{ showEmpty=!showEmpty; renderRecord(); });
   $("#add-prop").onclick=e=>propertyCreator(e.currentTarget,p=>{ showEmpty=true; renderRecord(); const el=document.querySelector(`#pbody .pv[data-edit="${p.id}"]`); if(el) startEdit(p,w,el); });
   $("#act-h").onclick=()=>{ showAct=!showAct; renderRecord(); };
-  $("#l-pin").onclick=()=>armPick(w.id); $("#l-area").onclick=()=>drawArea(w.id); $("#l-noarea")?.addEventListener("click",()=>setLocation(w.id,{area:null}));
+  $("#l-add").onclick=()=>addPoints(w.id);
   $("#l-fly").onclick=()=>{ setTab("map"); flyWO(w); };
-  $("#l-alt").onchange=e=>{ if(w.location?.pin) setLocation(w.id,{pin:{...w.location.pin,alt:+e.target.value||0}}); };
+  $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(1,+e.target.value||10)));
+  $("#l-alt")?.addEventListener("change",e=>{ const p=pts(w).slice(); p[0]={...p[0],alt:+e.target.value||0}; setPoints(w.id,p); });
+  $$("#pbody [data-mv]").forEach(b=>b.onclick=()=>movePoint(w.id,+b.dataset.mv));
+  $$("#pbody [data-rm]").forEach(b=>b.onclick=()=>{ const p=pts(w).slice(); p.splice(+b.dataset.rm,1); setPoints(w.id,p); });
+  $$("#pbody .ptrow").forEach(r=>r.onclick=e=>{ if(e.target.closest("button")) return; selectPoint(+r.dataset.i); });
   // property reorder by drag (V17)
   let dragPid=null; $$("#pbody .prop[data-pid]").forEach(r=>{ r.ondragstart=e=>{ dragPid=r.dataset.pid; e.dataTransfer.effectAllowed="move"; }; r.ondragover=e=>{ e.preventDefault(); r.classList.add("dragover"); }; r.ondragleave=()=>r.classList.remove("dragover"); r.ondrop=e=>{ e.preventDefault(); r.classList.remove("dragover"); if(!dragPid||dragPid===r.dataset.pid) return; const a=S.schema.props; a.splice(a.findIndex(p=>p.id===r.dataset.pid),0,a.splice(a.findIndex(p=>p.id===dragPid),1)[0]); saveSchema(); }; });
 }
@@ -1017,7 +1039,7 @@ function wireUI(){
   $$("#viewsw button").forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; saveView(); renderViews(); });
   $("#q").oninput=e=>{ S.q=e.target.value; renderAll(); };
   $("#b-new").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); };
-  $("#new-wo-map").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); if(map) armPick(id); };
+  $("#new-wo-map").onclick=async()=>{ const id=await createWO(); W(id)._focusTitle=true; openWO(id); if(map) addPoints(id); };
   $("#b-props").onclick=e=>propsToggle(e.currentTarget);
   $("#b-export").onclick=exportJSON;
   $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w){ setTab("map"); flyWO(w); } };
@@ -1102,28 +1124,28 @@ function addAssetOverlay(a){
 }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
 function woColor(w){ return col(status(w.statusId)?.color).map; }
-function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!(w.location?.pin||w.location?.area?.length)){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
+function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
 function addWOOverlay(w){
-  const loc=w.location||{}; if(!loc.pin&&!loc.area?.length) return;
-  const o={ sig:JSON.stringify(loc), m:null, pin:null, area:null };
-  const c=woColor(w); const pos=loc.pin||{...centroid(loc.area),alt:loc.areaHeight||10};
-  o.m=new lib.Marker3DInteractiveElement({ position:{lat:pos.lat,lng:pos.lng,altitude:pos.alt||0}, altitudeMode:"RELATIVE_TO_GROUND", extruded:true, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
+  const P=pts(w); if(!P.length) return;
+  const o={ sig:JSON.stringify(w.location||{}), m:null, pin:null, area:null, line:null };
+  const c=woColor(w); const a=locAnchor(w); const h=locHeight(w);
+  o.m=new lib.Marker3DInteractiveElement({ position:{lat:a.lat,lng:a.lng,altitude:P.length===1?(a.alt||0):P.length===2?2:h}, altitudeMode:"RELATIVE_TO_GROUND", extruded:P.length===1, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
   o.pin=pinTemplate(c,1.0); o.m.append(o.pin.tpl); o.m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); openWO(w.id); }); map.append(o.m);
-  if(loc.area?.length>=3){ o.area=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...loc.area,loc.area[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:loc.areaHeight||10})); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; openWO(w.id); }); map.append(o.area); }
+  if(P.length===2){ o.line=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_GROUND", strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:5, drawsOccludedSegments:true }); o.line.path=P.map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(o.line); }
+  if(P.length>=3){ o.area=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:h})); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; openWO(w.id); }); map.append(o.area); }
   OV.wo[w.id]=o; applyLegendTo(w);
 }
-function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } applyLegendTo(w); }
-function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; if(o.area){ hide?o.area.remove():(!o.area.isConnected&&map.append(o.area)); } }
+function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
+function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
 function fly(cam,ms=1800){ if(!map) return; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); }
 function flyAsset(a){ fly({ center:{lat:a.lat,lng:a.lng,altitude:(a.ground??GROUND_FALLBACK)+(a.h||10)*0.5}, range:Math.max(220,(a.fp||10)*4+(a.h||10)*3), tilt:66, heading:-20 },2000); }
 const GROUND_FALLBACK=80; // m above sea level at the Dofasco works when a pin has no recorded ground elevation
-function flyWO(w){ const loc=w.location||{}; if(!loc.pin&&!loc.area?.length||!map) return;
-  const pos=loc.pin||{...centroid(loc.area),alt:0,ground:loc.areaGround};
-  const ground=(pos.ground??loc.areaGround??GROUND_FALLBACK), alt=ground+(pos.alt||0)+(loc.area?.length?(loc.areaHeight||10)/2:0);
-  const r=loc.area?.length?Math.max(180,extentM(bbox(loc.area)).ns*2.5,extentM(bbox(loc.area)).ew*2.5):160;
-  const cam={ center:{lat:pos.lat,lng:pos.lng,altitude:alt}, range:r, tilt:62, heading:-30 };
+function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
+  const a=locAnchor(w); const ground=(a.ground??GROUND_FALLBACK), alt=ground+(a.alt||0)+(P.length>=3?locHeight(w)/2:0);
+  const r=P.length>=2?Math.max(160,extentM(bbox(P)).ns*2.5,extentM(bbox(P)).ew*2.5):160;
+  const cam={ center:{lat:a.lat,lng:a.lng,altitude:alt}, range:r, tilt:62, heading:-30 };
   map.flyCameraTo({ endCamera:cam, durationMillis:1800 });
   // pivot slowly around the work location once we arrive; any drag or wheel cancels it
   map.addEventListener("gmp-animationend",()=>{ if(S.open===w.id) map.flyCameraAround({ camera:cam, durationMillis:60000, rounds:1 }); },{once:true});
@@ -1134,26 +1156,38 @@ $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventLi
 /* ---------- mode bar, placing and drawing ---------- */
 function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
 function resetMode(){ setMode("","Site view","Click a pin or a work area to open it.",false); }
-$("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); if(d?.onCancel) d.onCancel(); resetMode(); };
+$("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round(e.position.altitude||0) };
   if(V.draw){ if(!inPoly(p,BOUNDARY())&&V.draw.kind!=="site"){ toast("Outside the site boundary.",true); return; } V.draw.pts.push(p); renderDraw(); return; }
   if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); }
 }
-function armPick(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } setTab("map"); V.placing={ onPlace:p=>setLocation(id,{ pin:{ lat:p.lat, lng:p.lng, ground:p.ground, alt:w.location?.pin?.alt||0 } }) }; map.classList.add("placing"); setMode("place","Place pin",`Click the model where <b>${w.id}</b> should be pinned.`,true); }
-function drawArea(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } setTab("map"); const h=+prompt("Area height (m)", w.location?.areaHeight||10)||10; startDraw("area",{ label:"Work area", height:h, onDone:pts=>{ const g=Math.round(pts.reduce((s,p)=>s+(p.ground||0),0)/pts.length)||undefined; setLocation(id,{ area:pts.map(p=>({lat:p.lat,lng:p.lng})), areaHeight:h, areaGround:g, pin:w.location?.pin||{ ...centroid(pts), alt:0, ground:g } }); } }); }
-function startDraw(kind,opts){ clearDraw(); V.draw={ kind, pts:(opts.initial||[]).map(p=>({lat:p.lat,lng:p.lng,ground:p.ground})), height:opts.height||0, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
+/* ---------- location points: add (continuous), move, remove, select ---------- */
+function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } setTab("map"); clearPointHandles();
+  startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:1, onDone:p=>{ setPoints(id,p); syncPointHandles(); }, onCancel:()=>syncPointHandles() }); }
+function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } setTab("map"); selPt=i; syncPointHandles();
+  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); } }; map.classList.add("placing"); setMode("place",`Point ${i+1}`,`Click the model where point <b>${i+1}</b> should be.`,true); }
+function selectPoint(i){ selPt=selPt===i?null:i; syncPointHandles(); if(S.open) renderRecord(); const w=W(S.open); if(selPt!=null&&w){ const p=pts(w)[selPt]; if(p&&map){ fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } } }
+/* numbered handles for the open record's points; click → select, then Move / Remove in the mode bar */
+const PTH=[];
+function clearPointHandles(){ PTH.forEach(x=>x.remove()); PTH.length=0; }
+function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw) return; const w=W(S.open); if(!w) return; const P=pts(w); if(P.length<1) { if(!V.placing) resetMode(); return; }
+  P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:{lat:p.lat,lng:p.lng,altitude:P.length===1?(p.alt||0)+0.5:1}, altitudeMode:"RELATIVE_TO_GROUND", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate(selPt===i?"#00FFE5":"#FF6A00",0.7).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
+  if(selPt!=null&&!V.placing){ setMode("place",`Point ${selPt+1} of ${P.length}`,`<button class="btn sm" id="pt-move">Move</button> <button class="btn sm danger" id="pt-rm">Remove</button>`,true); $("#pt-move").onclick=()=>movePoint(w.id,selPt); $("#pt-rm").onclick=()=>{ const Q=P.slice(); Q.splice(selPt,1); selPt=null; setPoints(w.id,Q); resetMode(); }; }
+  else if(!V.placing) resetMode(); }
+function startDraw(kind,opts){ clearDraw(); V.draw={ kind, pts:(opts.initial||[]).map(p=>({lat:p.lat,lng:p.lng,ground:p.ground,alt:p.alt})), height:opts.height||0, min:opts.min||3, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   d.pts.forEach((p,i)=>{ const m=new lib.Marker3DElement({ position:{lat:p.lat,lng:p.lng,altitude:2}, altitudeMode:"RELATIVE_TO_MESH", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate("#FF6A00",0.8).tpl); map.append(m); OV.draw.push(m); });
-  if(d.pts.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(255,106,0,0.95)", strokeWidth:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>({lat:p.lat,lng:p.lng,altitude:1})); map.append(l); OV.draw.push(l); }
+  if(d.pts.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(255,106,0,0.95)", strokeWidth:d.pts.length===2?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>({lat:p.lat,lng:p.lng,altitude:1})); map.append(l); OV.draw.push(l); }
   if(d.pts.length>=3&&d.height>0){ const g=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5 }); g.path=[...d.pts,d.pts[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:d.height})); map.append(g); OV.draw.push(g); }
-  setMode("draw",d.label,`<b>${d.pts.length}</b> point${d.pts.length===1?"":"s"} · click the model to add corners${d.pts.length<3?" (3 minimum)":""}`,true);
-  $("#draw-acts").hidden=false; $("#draw-done").disabled=d.pts.length<3; $("#draw-undo").disabled=!d.pts.length;
+  const n=d.pts.length; const kind=d.kind==="points"?` → ${ {0:"nothing yet",1:"pin",2:"line"}[n]||"area" }`:"";
+  setMode("draw",d.label,`<b>${n}</b> point${n===1?"":"s"}${kind} · click the model to add${d.kind==="site"&&n<3?" (3 minimum)":""}`,true);
+  $("#draw-acts").hidden=false; $("#draw-done").disabled=n<d.min; $("#draw-undo").disabled=!n;
 }
 function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; V.draw=null; map?.classList.remove("drawing"); $("#draw-acts").hidden=true; }
 $("#draw-undo").onclick=()=>{ if(V.draw){ V.draw.pts.pop(); renderDraw(); } };
-$("#draw-done").onclick=()=>{ const d=V.draw; if(!d||d.pts.length<3) return; const pts=d.pts.slice(); clearDraw(); resetMode(); d.onDone(pts); };
+$("#draw-done").onclick=()=>{ const d=V.draw; if(!d||d.pts.length<d.min) return; const P=d.pts.slice(); clearDraw(); resetMode(); d.onDone(P); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   startDraw("site",{ initial:BOUNDARY(), label:"Site boundary", onDone:async pts=>{ S.site={ ...(S.site||{}), boundary:pts }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
   fly({ center:{lat:siteGeom().c.lat,lng:siteGeom().c.lng,altitude:0}, range:siteGeom().range*1.05, tilt:0, heading:0 }); };
@@ -1367,7 +1401,7 @@ function wedgePath(e,ground){
   const pt=a=>({ ...offset(e.lat,e.lng,Math.sin(a)*dl,Math.cos(a)*dl), altitude:base+dz });
   return [ { lat:e.lat, lng:e.lng, altitude:base }, pt(h-half), pt(h+half), { lat:e.lat, lng:e.lng, altitude:base } ];
 }
-function photoGround(p){ const e=effPose(p); const w=W(S.open); return e?.ground ?? w?.location?.pin?.ground ?? w?.location?.areaGround ?? GROUND_FALLBACK; }
+function photoGround(p){ const e=effPose(p); const w=W(S.open); return e?.ground ?? locAnchor(w)?.ground ?? GROUND_FALLBACK; }
 function syncPhotoOverlays(){
   if(!map||!lib) return;
   const want=new Set(PH.filter(hasPos).map(p=>p.id));
