@@ -225,7 +225,7 @@ pre.json{background:var(--panel-2);border:1px solid var(--line);border-radius:8p
       <div class="meta">
         <b>Extent</b><span id="m-extent">…</span>
         <b>Assets</b><span id="m-assets">…</span>
-        <b>Basemap</b><span>Google photorealistic 3D, masked and bounded to the site</span>
+        <b>Basemap</b><span>Google photorealistic 3D, camera bounded to the site</span>
       </div>
     </div>
     <div class="search"><input id="qtree" type="search" placeholder="Filter asset list…" aria-label="Filter asset list"></div>
@@ -273,10 +273,10 @@ pre.json{background:var(--panel-2);border:1px solid var(--line);border-radius:8p
    Correct it in-app: "Edit site boundary" → click the shoreline → Finish.
    The camera limits, the mask and the recommended zoom-out all derive from it.
    ===================================================================== */
-/* Fitted to the red box over Industrial Sector L using geocoded anchors (Pier 17/18/20, Stipes Inlet, Dofasco Doors 409/401). */
+/* Site boundary: four corner pins dropped in Google Maps by Nikita (NW, NE, SE, SW). */
 const DEFAULT_BOUNDARY = [
-  { lat:43.27760, lng:-79.80620 }, { lat:43.27760, lng:-79.79920 },
-  { lat:43.26160, lng:-79.79920 }, { lat:43.26160, lng:-79.80620 },
+  { lat:43.280718, lng:-79.804060 }, { lat:43.278935, lng:-79.796119 },
+  { lat:43.259698, lng:-79.803403 }, { lat:43.261017, lng:-79.812128 },
 ];
 function inPoly(p, poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat)) && (p.lng < (b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
 const AREAS = ["Ironmaking","Steelmaking","Rolling & Finishing","Utilities","Projects"];
@@ -288,11 +288,11 @@ const ASSETS = [
   { id:"KOBM",   name:"KOBM baghouse stack",                       area:"Steelmaking", lat:43.2705, lng:-79.8022, h:74, fp:10, service:"Secondary emissions, BOF shop", surface:"Bare steel" },
   { id:"DS-1",   name:"Desulphurization baghouse stack",           area:"Steelmaking", lat:43.2695, lng:-79.8038, h:55, fp:8,  service:"Hot metal desulph. fume", surface:"Bare steel" },
   { id:"HSM",    name:"Hot Strip Mill — roof & monitor vents",     area:"Rolling & Finishing", lat:43.2665, lng:-79.8035, h:28, fp:90, service:"Mill building envelope", surface:"Cladding, galvanized" },
-  { id:"GL-4",   name:"No. 4 Galvanizing line — furnace stack",    area:"Rolling & Finishing", lat:43.265, lng:-79.8022, h:38, fp:6, service:"Annealing furnace flue", surface:"Insulated steel" },
+  { id:"GL-4",   name:"No. 4 Galvanizing line — furnace stack",    area:"Rolling & Finishing", lat:43.265, lng:-79.8042, h:38, fp:6, service:"Annealing furnace flue", surface:"Insulated steel" },
   { id:"BH-1",   name:"Boiler house stack — Utilities",            area:"Utilities", lat:43.268, lng:-79.8018, h:65, fp:9,  service:"Boiler flue gas", surface:"Bare steel, external ladder" },
   { id:"T-102",  name:"Fuel oil tank T-102",                       area:"Utilities", lat:43.2638, lng:-79.804, h:16, fp:40, service:"No. 6 fuel oil", surface:"Painted steel, cone roof" },
   { id:"WW-3",   name:"Wastewater clarifier No. 3",                area:"Utilities", lat:43.2762, lng:-79.802, h:6,  fp:34, service:"Process water treatment", surface:"Concrete, steel bridge" },
-  { id:"DRI",    name:"DRI/EAF project — structural steel",        area:"Projects", lat:43.2628, lng:-79.802, h:40, fp:60, service:"Under construction", surface:"Erected steel, unpainted" },
+  { id:"DRI",    name:"DRI/EAF project — structural steel",        area:"Projects", lat:43.2628, lng:-79.8046, h:40, fp:60, service:"Under construction", surface:"Erected steel, unpainted" },
 ];
 const A = Object.fromEntries(ASSETS.map(a=>[a.id,a]));
 
@@ -360,7 +360,7 @@ function seed(){
     mk(3, { asset:"WW-3", type:"visual", task:"Weld / nozzle visual", title:"Launder & weir visual; UT on bridge members", priority:3, status:"completed", requiredBy:dplus(-10), plannedStart:dplus(-16), completed:dplus(-15), estHours:3, requestedBy:"D. Leung, Utilities" }),
     mk(27,{ asset:"DRI", type:"visual", task:"External visual", title:"Progress + QA visual on erected columns", priority:3, requiredBy:dplus(30), estHours:3, requestedBy:"A. Ferreira, Projects",
       scope:"Construction-phase progress visual: erected columns, crane rail welds. Coordinate with GC exclusion zones.",
-      area:[{lat:43.2622,lng:-79.8028},{lat:43.2634,lng:-79.8028},{lat:43.2634,lng:-79.8012},{lat:43.2622,lng:-79.8012}], areaHeight:40, position:{lat:43.2628,lng:-79.8020,alt:42} }),
+      area:[{lat:43.2622,lng:-79.8054},{lat:43.2634,lng:-79.8054},{lat:43.2634,lng:-79.8038},{lat:43.2622,lng:-79.8038}], areaHeight:40, position:{lat:43.2628,lng:-79.8046,alt:42} }),
     mk(29,{ asset:"GL-4", type:"insulation", task:"Insulation window", title:"Insulation window at flue elbow for UT", priority:2, requiredBy:dplus(-2), access:"scaffold", crew:"Contractor scaffold", estHours:12, condition:"isolation required",
       scope:"Open 600 × 600 window at the flue elbow, 18 m, for UT follow-up. Reclad after readings." }),
     mk(31,{ asset:"", type:"visual", task:"External visual", title:"Stockyard conveyor gallery — visual", priority:3, requiredBy:dplus(20), estHours:3, requestedBy:"P. Singh, Facilities",
@@ -370,7 +370,7 @@ function seed(){
 }
 
 /* ---------- persistence (this browser) ---------- */
-const LS = { wo:"sgd6_wo", site:"sgd6_site", key:"sgd_gmaps_key" };
+const LS = { wo:"sgd8_wo", site:"sgd8_site", key:"sgd_gmaps_key" };
 let WOS = [], BOUNDARY = [];
 function load(){
   try{ const b=JSON.parse(localStorage.getItem(LS.site)||"null"); BOUNDARY = Array.isArray(b)&&b.length>=3 ? b : DEFAULT_BOUNDARY.slice(); }catch{ BOUNDARY = DEFAULT_BOUNDARY.slice(); }
