@@ -29,6 +29,7 @@
   --ok:#2FC98A; --warn:#E8A93A; --crit:#FF4A33;
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:var(--ground);color:var(--ink);font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;height:100vh}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -56,7 +57,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-vis
 #side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #canvas-wrap{position:relative;min-width:0;min-height:0;background:var(--canvas)}
 gmp-map-3d{position:absolute;inset:0;width:100%;height:100%}
-gmp-map-3d.placing{cursor:crosshair}
+gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 .eyebrow{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
 .meta{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;margin-top:8px;font-size:12px;color:var(--ink-2)}
 .meta b{font-weight:500;color:var(--ink-3);font-family:var(--mono);font-size:10.5px;letter-spacing:.04em;text-transform:uppercase;padding-top:2px}
@@ -89,14 +90,16 @@ gmp-map-3d.placing{cursor:crosshair}
 .btn.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}.btn.primary:hover{filter:brightness(1.08)}.btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.arm{border-color:var(--wo-outstanding);color:var(--wo-outstanding)}
+.btn.sm{padding:4px 9px;font-size:11.5px}
 #hud{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:6}
-#mode{position:absolute;left:12px;top:12px;z-index:30;display:flex;align-items:center;gap:10px;padding:6px 8px 6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:12px;color:var(--ink-2);max-width:min(92%,560px)}
+#mode{position:absolute;left:12px;top:12px;z-index:30;display:flex;align-items:center;gap:10px;padding:6px 8px 6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:12px;color:var(--ink-2);max-width:min(92%,620px);flex-wrap:wrap}
 #mode .mode-tag{font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:5px;background:var(--panel-2);color:var(--ink);white-space:nowrap}
 #mode.asset{border-color:var(--sel);box-shadow:0 0 0 2px rgba(0,255,229,.25),var(--shadow)}#mode.asset .mode-tag{background:var(--sel);color:#0B0F1F}
 #mode.wo{border-color:var(--wo-in_progress);box-shadow:0 0 0 2px rgba(45,127,249,.25),var(--shadow)}#mode.wo .mode-tag{background:var(--wo-in_progress);color:#fff}
-#mode.place{border-color:var(--wo-outstanding);box-shadow:0 0 0 2px rgba(255,106,0,.22),var(--shadow)}#mode.place .mode-tag{background:var(--wo-outstanding);color:#fff}
+#mode.place,#mode.draw{border-color:var(--wo-outstanding);box-shadow:0 0 0 2px rgba(255,106,0,.22),var(--shadow)}#mode.place .mode-tag,#mode.draw .mode-tag{background:var(--wo-outstanding);color:#fff}
 #mode .mode-txt b{color:var(--ink);font-family:var(--mono);font-weight:600}
 #mode button{box-shadow:none}
+#mode .draw-acts{display:flex;gap:6px}
 #legend{position:absolute;right:12px;bottom:12px;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px 12px;font-size:11.5px;color:var(--ink-2);background:var(--panel);border:1px solid var(--line);padding:5px 9px;border-radius:8px;z-index:6}
 #legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:-1px}
 #legend span{cursor:pointer;user-select:none;padding:1px 4px;border-radius:5px}#legend span:hover{background:var(--panel-2)}#legend span.off{opacity:.38;text-decoration:line-through}
@@ -141,12 +144,15 @@ table.hist td{padding:4px 6px 4px 0;vertical-align:top;border-bottom:1px solid v
 .form label.full{grid-column:1/-1}
 .form input,.form select,.form textarea{font:inherit;font-size:13px;font-weight:400;text-transform:none;letter-spacing:0;color:var(--ink);background:var(--panel-2);border:1px solid var(--line);border-radius:7px;padding:6px 8px;width:100%}
 .form textarea{min-height:74px;resize:vertical}
-.place{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;background:var(--panel-2);margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between}
+.place{border:1px dashed var(--line);border-radius:8px;padding:8px 10px;font-size:12.5px;background:var(--panel-2);margin-top:8px;display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .place.set{border-style:solid;border-color:var(--sel)}.place.arm{border-color:var(--wo-outstanding);color:var(--ink)}
+.place .btns{display:flex;gap:6px}
+.place .btn{box-shadow:none}
 .actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 .actions .btn{box-shadow:none}
 .holdbox{display:flex;gap:6px;margin-top:8px}.holdbox input{flex:1;font:inherit;font-size:13px;padding:6px 8px;border:1px solid var(--line);border-radius:7px;background:var(--panel-2);color:var(--ink)}
 .holdbox[hidden]{display:none}
+pre.json{background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:10px;font-size:11px;line-height:1.4;max-height:200px;overflow:auto;white-space:pre-wrap;word-break:break-all}
 
 /* ---------- work orders page ---------- */
 #page{position:absolute;inset:0;overflow:auto;padding:18px 22px;display:none;background:var(--ground);z-index:35}
@@ -217,23 +223,24 @@ table.hist td{padding:4px 6px 4px 0;vertical-align:top;border-bottom:1px solid v
     <div class="title">
       <div class="eyebrow">Dofasco works · site register</div>
       <div class="meta">
-        <b>Extent</b><span>Burlington St E to the harbour · ~2.8 × 1.5 km</span>
+        <b>Extent</b><span id="m-extent">…</span>
         <b>Assets</b><span id="m-assets">…</span>
-        <b>Basemap</b><span>Google photorealistic 3D, camera bounded to the site</span>
+        <b>Basemap</b><span>Google photorealistic 3D, masked and bounded to the site</span>
       </div>
     </div>
     <div class="search"><input id="qtree" type="search" placeholder="Filter asset list…" aria-label="Filter asset list"></div>
     <div id="tree" role="tree"></div>
-    <div class="foot">Orbit: drag · Pan: shift-drag · Zoom: wheel · Click an asset or a work-order pin.<br>Pins are approximate placements; edit them in the asset register. <button class="link" id="reset">Reset demo data</button> · <button class="link" id="keybtn">Change map key</button></div>
+    <div class="foot">Orbit: drag · Pan: shift-drag · Zoom: wheel · Click an asset, a pin or a work area.<br><button class="link" id="edit-site">Edit site boundary</button> · <button class="link" id="reset">Reset demo data</button> · <button class="link" id="keybtn">Change map key</button></div>
   </aside>
 
   <div id="canvas-wrap">
-    <div id="mode" class="plant"><span class="mode-tag">Site view</span><span class="mode-txt">All assets and work orders. Click an asset or a pin to enter Asset view.</span><button class="btn" id="mode-exit" hidden>✕ Exit</button></div>
+    <div id="mode" class="plant"><span class="mode-tag">Site view</span><span class="mode-txt">All assets and work orders. Click an asset, a pin or a work area.</span><span class="draw-acts" id="draw-acts" hidden><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Finish</button></span><button class="btn sm" id="mode-exit" hidden>✕ Exit</button></div>
     <div id="hud">
-      <button class="btn" data-view="site">Site</button>
+      <button class="btn" data-view="site" title="Recommended zoom-out: the whole site in frame">Site</button>
       <button class="btn" data-view="north">From harbour</button>
       <button class="btn" data-view="plan">Plan</button>
       <button class="btn" id="b-orbit" title="Slow orbit of the whole works">Orbit</button>
+      <button class="btn on" id="b-mask" title="Dim everything outside the site boundary">Mask</button>
     </div>
     <div id="legend"></div>
     <div id="stats"></div>
@@ -263,34 +270,36 @@ table.hist td{padding:4px 6px 4px 0;vertical-align:top;border-bottom:1px solid v
 
 <script>
 /* =====================================================================
-   SITE + ASSET REGISTER — approximate placements on the Dofasco footprint.
-   lat/lng: marker position · h: structure height (m) · fp: footprint (m)
+   SITE BOUNDARY — default is an estimate of the Dofasco peninsula.
+   Correct it in-app: "Edit site boundary" → click the shoreline → Finish.
+   The camera limits, the mask and the recommended zoom-out all derive from it.
    ===================================================================== */
-const SITE = {
-  center:{ lat:43.2705, lng:-79.8150 },
-  bounds:{ north:43.2815, south:43.2600, east:-79.7960, west:-79.8360 },   // camera stays inside this box
-  range:2600, tilt:62, heading:-35,
-};
+const DEFAULT_BOUNDARY = [
+  { lat:43.2585, lng:-79.8130 }, { lat:43.2700, lng:-79.8140 }, { lat:43.2800, lng:-79.8140 }, { lat:43.2845, lng:-79.8120 },
+  { lat:43.2848, lng:-79.8040 }, { lat:43.2780, lng:-79.8010 }, { lat:43.2660, lng:-79.7995 }, { lat:43.2585, lng:-79.8035 },
+];
 const AREAS = ["Ironmaking","Steelmaking","Rolling & Finishing","Utilities","Projects"];
+/* asset register — approximate placements; lat/lng: marker · h: height (m) · fp: footprint (m) */
 const ASSETS = [
-  { id:"BF-4",   name:"No. 4 Blast Furnace — stove stack",       area:"Ironmaking", lat:43.2716, lng:-79.8128, h:82, fp:12, service:"Hot blast stoves, 1,200 °C", surface:"Insulated steel shell" },
-  { id:"BF-2",   name:"No. 2 Blast Furnace — uptakes & downcomer", area:"Ironmaking", lat:43.2706, lng:-79.8164, h:70, fp:22, service:"BF top gas, refractory lined", surface:"Bare steel, refractory" },
-  { id:"GH-1",   name:"BF gas holder",                           area:"Ironmaking", lat:43.2719, lng:-79.8192, h:48, fp:36, service:"Blast furnace gas storage", surface:"Painted steel" },
-  { id:"KOBM",   name:"KOBM baghouse stack",                     area:"Steelmaking", lat:43.2727, lng:-79.8102, h:74, fp:10, service:"Secondary emissions, BOF shop", surface:"Bare steel" },
-  { id:"DS-1",   name:"Desulphurization baghouse stack",         area:"Steelmaking", lat:43.2712, lng:-79.8118, h:55, fp:8,  service:"Hot metal desulph. fume", surface:"Bare steel" },
-  { id:"HSM",    name:"Hot Strip Mill — roof & monitor vents",   area:"Rolling & Finishing", lat:43.2681, lng:-79.8082, h:28, fp:90, service:"Mill building envelope", surface:"Cladding, galvanized" },
-  { id:"GL-4",   name:"No. 4 Galvanizing line — furnace stack",  area:"Rolling & Finishing", lat:43.2660, lng:-79.8130, h:38, fp:6, service:"Annealing furnace flue", surface:"Insulated steel" },
-  { id:"BH-1",   name:"Boiler house stack — Utilities",          area:"Utilities", lat:43.2696, lng:-79.8204, h:65, fp:9,  service:"Boiler flue gas", surface:"Bare steel, external ladder" },
-  { id:"T-102",  name:"Fuel oil tank T-102",                     area:"Utilities", lat:43.2668, lng:-79.8238, h:16, fp:40, service:"No. 6 fuel oil", surface:"Painted steel, cone roof" },
-  { id:"WW-3",   name:"Wastewater clarifier No. 3",              area:"Utilities", lat:43.2752, lng:-79.8142, h:6,  fp:34, service:"Process water treatment", surface:"Concrete, steel bridge" },
-  { id:"DRI",    name:"DRI/EAF project — structural steel",      area:"Projects", lat:43.2733, lng:-79.8062, h:40, fp:60, service:"Under construction", surface:"Erected steel, unpainted" },
+  { id:"BF-4",   name:"No. 4 Blast Furnace — stove stack",         area:"Ironmaking", lat:43.2728, lng:-79.8078, h:82, fp:12, service:"Hot blast stoves, 1,200 °C", surface:"Insulated steel shell" },
+  { id:"BF-2",   name:"No. 2 Blast Furnace — uptakes & downcomer",  area:"Ironmaking", lat:43.2722, lng:-79.8098, h:70, fp:22, service:"BF top gas, refractory lined", surface:"Bare steel, refractory" },
+  { id:"GH-1",   name:"BF gas holder",                             area:"Ironmaking", lat:43.2745, lng:-79.8112, h:48, fp:36, service:"Blast furnace gas storage", surface:"Painted steel" },
+  { id:"KOBM",   name:"KOBM baghouse stack",                       area:"Steelmaking", lat:43.2690, lng:-79.8072, h:74, fp:10, service:"Secondary emissions, BOF shop", surface:"Bare steel" },
+  { id:"DS-1",   name:"Desulphurization baghouse stack",           area:"Steelmaking", lat:43.2700, lng:-79.8090, h:55, fp:8,  service:"Hot metal desulph. fume", surface:"Bare steel" },
+  { id:"HSM",    name:"Hot Strip Mill — roof & monitor vents",     area:"Rolling & Finishing", lat:43.2655, lng:-79.8085, h:28, fp:90, service:"Mill building envelope", surface:"Cladding, galvanized" },
+  { id:"GL-4",   name:"No. 4 Galvanizing line — furnace stack",    area:"Rolling & Finishing", lat:43.2625, lng:-79.8090, h:38, fp:6, service:"Annealing furnace flue", surface:"Insulated steel" },
+  { id:"BH-1",   name:"Boiler house stack — Utilities",            area:"Utilities", lat:43.2675, lng:-79.8110, h:65, fp:9,  service:"Boiler flue gas", surface:"Bare steel, external ladder" },
+  { id:"T-102",  name:"Fuel oil tank T-102",                       area:"Utilities", lat:43.2610, lng:-79.8115, h:16, fp:40, service:"No. 6 fuel oil", surface:"Painted steel, cone roof" },
+  { id:"WW-3",   name:"Wastewater clarifier No. 3",                area:"Utilities", lat:43.2770, lng:-79.8060, h:6,  fp:34, service:"Process water treatment", surface:"Concrete, steel bridge" },
+  { id:"DRI",    name:"DRI/EAF project — structural steel",        area:"Projects", lat:43.2640, lng:-79.8040, h:40, fp:60, service:"Under construction", surface:"Erected steel, unpainted" },
 ];
 const A = Object.fromEntries(ASSETS.map(a=>[a.id,a]));
 
-/* ---------- work-order vocabulary (from the Dispatch template) ---------- */
+/* ---------- work-order vocabulary ---------- */
 const STATUSES = ["outstanding","in_progress","on_hold","completed"];
 const S_LABEL = { outstanding:"Outstanding", in_progress:"In progress", on_hold:"On hold", completed:"Completed" };
 const S_COLOR = { outstanding:"#FF6A00", in_progress:"#2D7FF9", on_hold:"#A66BFF", completed:"#1FB58F" };
+const S_RGB   = { outstanding:"255,106,0", in_progress:"45,127,249", on_hold:"166,107,255", completed:"31,181,143" };
 const TYPES = { ut:"UT thickness", visual:"Visual inspection", thermal:"Thermal (IR)", insulation:"Insulation / CUI screen", access:"Access build" };
 const TASKS = {
   ut:["Thickness grid","Spot readings at elevations","t-min follow-up"],
@@ -311,14 +320,22 @@ const dplus = n => { const d=new Date(TODAY); d.setDate(d.getDate()+n); return i
 const daysUntil = s => Math.round((new Date(s+"T00:00:00") - TODAY)/86400000);
 const isLate = w => w.status!=="completed" && daysUntil(w.requiredBy) < 0;
 
+/* ---------- geometry ---------- */
+function offset(lat,lng,dx,dy){ return { lat:lat+dy/111320, lng:lng+dx/(111320*Math.cos(lat*Math.PI/180)) }; }
+function square(lat,lng,r,alt){ return [[-r,-r],[r,-r],[r,r],[-r,r],[-r,-r]].map(([x,y])=>({...offset(lat,lng,x,y),altitude:alt})); }
+function bbox(pts){ return { north:Math.max(...pts.map(p=>p.lat)), south:Math.min(...pts.map(p=>p.lat)), east:Math.max(...pts.map(p=>p.lng)), west:Math.min(...pts.map(p=>p.lng)) }; }
+function centroid(pts){ return { lat:pts.reduce((s,p)=>s+p.lat,0)/pts.length, lng:pts.reduce((s,p)=>s+p.lng,0)/pts.length }; }
+function extentM(b){ const c=(b.north+b.south)/2; return { ns:(b.north-b.south)*111320, ew:(b.east-b.west)*111320*Math.cos(c*Math.PI/180) }; }
+
 /* ---------- seed work orders ---------- */
 function seed(){
   const mk = (n, o) => Object.assign({
     id:"WO-26-"+String(n).padStart(3,"0"), status:"outstanding", priority:3, access:"drone", crew:"Skygauge crew A",
     condition:"in service", estHours:4, requestedBy:"J. Marsh, Integrity", raised:dplus(-14), plannedStart:"", completed:"",
-    scope:"", log:[], holdReason:"",
+    scope:"", log:[], holdReason:"", area:null, areaHeight:0,
   }, o);
-  const withPos = w => { const a=A[w.asset]; w.position = w.position || { lat:a.lat, lng:a.lng, alt:Math.round(a.h*0.7) }; w.log = w.log.length?w.log:[{date:w.raised, note:"Raised by "+w.requestedBy}]; return w; };
+  const withPos = w => { const a=A[w.asset]; if(!w.position&&a) w.position={ lat:a.lat, lng:a.lng, alt:Math.round(a.h*0.7) }; if(!w.log.length) w.log=[{date:w.raised, note:"Raised by "+w.requestedBy}]; return w; };
+  const hsm=A.HSM;
   return [
     mk(14,{ asset:"BF-4", type:"ut", task:"Thickness grid", title:"UT grid on stove stack shell, 0–40 m", priority:1, status:"in_progress", requiredBy:dplus(7), plannedStart:dplus(-2), estHours:6,
       scope:"Contact UT thickness grid on stack shell, 0–40 m elevation, 2 m pitch. Suspected CUI at insulation seams; report anything under 6.4 mm with photos.",
@@ -335,25 +352,42 @@ function seed(){
     mk(6, { asset:"T-102", type:"ut", task:"Spot readings at elevations", title:"Shell courses 1–4 UT, roof visual", priority:3, status:"completed", requiredBy:dplus(-3), plannedStart:dplus(-12), completed:dplus(-8), estHours:4, requestedBy:"R. Okafor, Reliability",
       scope:"Shell course UT, courses 1–4, 4 quadrants. Roof visual for pitting." }),
     mk(24,{ asset:"HSM", type:"visual", task:"Roof & cladding survey", title:"Roof cladding, gutters and monitor vents", priority:3, requiredBy:dplus(25), estHours:3, requestedBy:"P. Singh, Facilities",
-      scope:"Visual survey ahead of winter shutdown. Flag loose cladding, blocked gutters, corroded vent louvres." }),
+      scope:"Visual survey ahead of winter shutdown. Flag loose cladding, blocked gutters, corroded vent louvres.",
+      area:square(hsm.lat,hsm.lng,hsm.fp/2,0).slice(0,4).map(p=>({lat:p.lat,lng:p.lng})), areaHeight:hsm.h+4, position:{lat:hsm.lat,lng:hsm.lng,alt:hsm.h+6} }),
     mk(16,{ asset:"DS-1", type:"ut", task:"Spot readings at elevations", title:"UT at 4 elevations; stack-to-duct weld", priority:2, status:"on_hold", holdReason:"Awaiting hot-metal outage window for the weld zone", requiredBy:dplus(10), estHours:4,
       log:[{date:dplus(-12),note:"Raised by J. Marsh, Integrity"},{date:dplus(-5),note:"On hold: awaiting hot-metal outage window for the weld zone"}] }),
     mk(3, { asset:"WW-3", type:"visual", task:"Weld / nozzle visual", title:"Launder & weir visual; UT on bridge members", priority:3, status:"completed", requiredBy:dplus(-10), plannedStart:dplus(-16), completed:dplus(-15), estHours:3, requestedBy:"D. Leung, Utilities" }),
-    mk(27,{ asset:"DRI", type:"visual", task:"External visual", title:"Progress + QA visual on erected columns", priority:3, requiredBy:dplus(30), estHours:3, requestedBy:"A. Ferreira, Projects", condition:"in service",
-      scope:"Construction-phase progress visual: erected columns, crane rail welds. Coordinate with GC exclusion zones." }),
-    mk(29,{ asset:"GL-4", type:"insulation", task:"Insulation window", title:"Insulation window at flue elbow for UT", priority:2, requiredBy:dplus(-2), access:"scaffold", crew:"Contractor scaffold", estHours:12, requestedBy:"J. Marsh, Integrity", condition:"isolation required",
+    mk(27,{ asset:"DRI", type:"visual", task:"External visual", title:"Progress + QA visual on erected columns", priority:3, requiredBy:dplus(30), estHours:3, requestedBy:"A. Ferreira, Projects",
+      scope:"Construction-phase progress visual: erected columns, crane rail welds. Coordinate with GC exclusion zones.",
+      area:[{lat:43.2634,lng:-79.8052},{lat:43.2648,lng:-79.8052},{lat:43.2648,lng:-79.8030},{lat:43.2634,lng:-79.8030}], areaHeight:40, position:{lat:43.2641,lng:-79.8041,alt:42} }),
+    mk(29,{ asset:"GL-4", type:"insulation", task:"Insulation window", title:"Insulation window at flue elbow for UT", priority:2, requiredBy:dplus(-2), access:"scaffold", crew:"Contractor scaffold", estHours:12, condition:"isolation required",
       scope:"Open 600 × 600 window at the flue elbow, 18 m, for UT follow-up. Reclad after readings." }),
+    mk(31,{ asset:"", type:"visual", task:"External visual", title:"Stockyard conveyor gallery — visual", priority:3, requiredBy:dplus(20), estHours:3, requestedBy:"P. Singh, Facilities",
+      scope:"General-site order (no asset tag): conveyor gallery cladding and truss visual over the coal stockpiles.",
+      area:[{lat:43.2800,lng:-79.8105},{lat:43.2812,lng:-79.8105},{lat:43.2812,lng:-79.8060},{lat:43.2800,lng:-79.8060}], areaHeight:22, position:{lat:43.2806,lng:-79.8082,alt:24} }),
   ].map(withPos);
 }
 
 /* ---------- persistence (this browser) ---------- */
-const LS = { wo:"sgd2_wo", key:"sgd_gmaps_key" };
-let WOS = [];
-function load(){ try{ const s=JSON.parse(localStorage.getItem(LS.wo)||"null"); WOS = Array.isArray(s)&&s.length ? s : seed(); }catch{ WOS = seed(); } }
+const LS = { wo:"sgd3_wo", site:"sgd3_site", key:"sgd_gmaps_key" };
+let WOS = [], BOUNDARY = [];
+function load(){
+  try{ const s=JSON.parse(localStorage.getItem(LS.wo)||"null"); WOS = Array.isArray(s)&&s.length ? s : seed(); }catch{ WOS = seed(); }
+  try{ const b=JSON.parse(localStorage.getItem(LS.site)||"null"); BOUNDARY = Array.isArray(b)&&b.length>=3 ? b : DEFAULT_BOUNDARY.slice(); }catch{ BOUNDARY = DEFAULT_BOUNDARY.slice(); }
+}
 function save(){ try{ localStorage.setItem(LS.wo, JSON.stringify(WOS)); }catch{} }
+function saveSite(){ try{ localStorage.setItem(LS.site, JSON.stringify(BOUNDARY)); }catch{} }
 load();
 const W = id => WOS.find(w=>w.id===id);
 const nextId = () => "WO-26-"+String(Math.max(0,...WOS.map(w=>+w.id.split("-")[2]))+1).padStart(3,"0");
+
+/* ---------- site camera derived from the boundary ---------- */
+function siteGeom(){
+  const b=bbox(BOUNDARY), c=centroid(BOUNDARY), e=extentM(b);
+  const span=Math.max(e.ns,e.ew);
+  return { b, c, e, span, range:Math.round(span*1.25), maxAlt:Math.round(span*1.6), pad:0.0025 };
+}
+const siteCam = ()=>{ const g=siteGeom(); return { center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range, tilt:55, heading:-15 }; };
 
 /* ---------- helpers ---------- */
 const $ = s => document.querySelector(s);
@@ -362,16 +396,17 @@ const pBadge = p => `<span class="badge p${p}">P${p}</span>`;
 const sBadge = s => `<span class="badge wo-${s}">${S_LABEL[s]}</span>`;
 const accChip = a => `<span class="chip acc-${a}"><span class="acc-dot"></span>${P(ACCESS[a]||a)}</span>`;
 const dueTxt = w => { if(w.status==="completed") return `<span class="mono">done ${P(w.completed)}</span>`; const n=daysUntil(w.requiredBy); return n<0?`<span class="late">${-n} d overdue</span>`:n===0?`<span class="mono">due today</span>`:`<span class="mono">due in ${n} d</span>`; };
+const whereTxt = w => w.asset ? `<span class="mono">${P(w.asset)}</span>` : `<span class="mono" title="General-site work order">Site</span>`;
 $("#asof").textContent = iso(TODAY);
 
 /* ---------- view state ---------- */
-const V = { tab:"view", sel:null, selWO:null, placing:null, legendOff:new Set(), filt:{type:"",prio:"",late:false,q:""} };
+const V = { tab:"view", sel:null, selWO:null, placing:null, draw:null, legendOff:new Set(), mask:true, filt:{type:"",prio:"",late:false,q:""} };
 
 /* =====================================================================
    MAP
    ===================================================================== */
 let map=null, lib=null, markerLib=null;
-const OV = { wo:{}, asset:{} };
+const OV = { wo:{}, asset:{}, site:{ mask:null, line:null }, draw:[] };
 let placePin=null;
 
 function getKey(){
@@ -383,7 +418,7 @@ function showGate(err){ $("#gate").hidden=false; $("#keyErr").textContent=err||"
 $("#keySave").onclick = ()=>{ const k=$("#keyInput").value.trim(); if(!/^AIza[0-9A-Za-z_\-]{20,}$/.test(k)){ $("#keyErr").textContent="That doesn't look like a Google Maps key (they start with AIza)."; return; } try{ localStorage.setItem(LS.key,k); }catch{} location.reload(); };
 $("#keyInput").onkeydown = e=>{ if(e.key==="Enter") $("#keySave").click(); };
 $("#keybtn").onclick = ()=>{ try{ localStorage.removeItem(LS.key); }catch{} location.reload(); };
-$("#reset").onclick = ()=>{ if(!confirm("Reset all work orders to the demo seed?")) return; try{ localStorage.removeItem(LS.wo); }catch{} location.reload(); };
+$("#reset").onclick = ()=>{ if(!confirm("Reset all work orders and the site boundary to the demo seed?")) return; try{ localStorage.removeItem(LS.wo); localStorage.removeItem(LS.site); }catch{} location.reload(); };
 window.gm_authFailure = ()=> showGate("Google rejected this key. Check Maps JavaScript API is enabled, billing is on, and the key's website restriction includes "+location.origin);
 
 function loadGoogle(key){
@@ -394,22 +429,43 @@ async function initMap(){
   const key=getKey(); if(!key){ showGate(); return; }
   try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); markerLib=await google.maps.importLibrary("marker"); }
   catch(e){ showGate("Could not load Google Maps: "+(e.message||e)); return; }
-  const { Map3DElement } = lib;
-  map = new Map3DElement({
-    center:{ lat:SITE.center.lat, lng:SITE.center.lng, altitude:0 }, range:SITE.range, tilt:SITE.tilt, heading:SITE.heading,
-    mode:"SATELLITE", bounds:SITE.bounds, maxAltitude:3500, minAltitude:30,
-  });
+  const cam=siteCam(), g=siteGeom();
+  map = new lib.Map3DElement({ ...cam, mode:"SATELLITE" });
+  applyCameraLimits();
   map.addEventListener("gmp-error", e=>showGate("Map error: "+(e.detail?.message||"see console")));
   map.addEventListener("gmp-click", onMapClick);
   $("#canvas-wrap").prepend(map);
   $("#loading").hidden=true;
+  drawSite();
   ASSETS.forEach(addAssetOverlay);
   WOS.forEach(addWOOverlay);
   applyLegend();
 }
 
-function offset(lat,lng,dx,dy){ return { lat:lat+dy/111320, lng:lng+dx/(111320*Math.cos(lat*Math.PI/180)) }; }
-function square(lat,lng,r,alt){ return [[-r,-r],[r,-r],[r,r],[-r,r],[-r,-r]].map(([x,y])=>({...offset(lat,lng,x,y),altitude:alt})); }
+function applyCameraLimits(){
+  const g=siteGeom();
+  // camera centre stays inside the boundary box (+ a small pad); zoom-out capped a little past the recommended framing
+  map.bounds = { north:g.b.north+g.pad, south:g.b.south-g.pad, east:g.b.east+g.pad, west:g.b.west-g.pad };
+  map.maxAltitude = g.maxAlt; map.minAltitude = 15;
+  $("#m-extent").textContent = `${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km · ${BOUNDARY.length} boundary points`;
+}
+
+/* --- site boundary: mask outside, outline on the ground --- */
+function drawSite(){
+  const { Polygon3DElement, Polyline3DElement } = lib;
+  OV.site.mask?.remove(); OV.site.line?.remove();
+  const g=siteGeom(), R=0.08;
+  const outer=[ {lat:g.c.lat-R,lng:g.c.lng-R},{lat:g.c.lat-R,lng:g.c.lng+R},{lat:g.c.lat+R,lng:g.c.lng+R},{lat:g.c.lat+R,lng:g.c.lng-R},{lat:g.c.lat-R,lng:g.c.lng-R} ].map(p=>({...p,altitude:0}));
+  const ring=[...BOUNDARY, BOUNDARY[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:0}));
+  const mask=new Polygon3DElement({ altitudeMode:"RELATIVE_TO_MESH", fillColor:"rgba(23,32,68,0.86)", strokeColor:"rgba(0,0,0,0)", strokeWidth:0, drawsOccludedSegments:false });
+  mask.outerCoordinates=outer; mask.innerCoordinates=[ring];
+  if(V.mask) map.append(mask);
+  const line=new Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:3, drawsOccludedSegments:true });
+  line.coordinates=ring.map(p=>({...p,altitude:1}));
+  map.append(line);
+  OV.site={ mask, line };
+}
+$("#b-mask").onclick=()=>{ V.mask=!V.mask; $("#b-mask").classList.toggle("on",V.mask); if(!map||!OV.site.mask) return; V.mask?map.append(OV.site.mask):OV.site.mask.remove(); };
 
 function addAssetOverlay(a){
   const { Polygon3DElement, Marker3DInteractiveElement } = lib;
@@ -419,53 +475,65 @@ function addAssetOverlay(a){
   const tag = new Marker3DInteractiveElement({ position:{lat:a.lat,lng:a.lng,altitude:4}, altitudeMode:"RELATIVE_TO_MESH", label:a.id, sizePreserved:true, drawsWhenOccluded:true });
   const pin = new markerLib.PinElement({ background:"#172044", borderColor:"#E9EFFF", glyphColor:"#E9EFFF", scale:0.72 });
   const t=document.createElement("template"); t.content.append(pin); tag.append(t);
-  tag.addEventListener("gmp-click", e=>{ e.stopPropagation?.(); openAsset(a.id,true); });
+  tag.addEventListener("gmp-click", e=>{ if(V.draw||map.classList.contains("placing")) return; e.stopPropagation?.(); openAsset(a.id,true); });
   map.append(tag);
   OV.asset[a.id] = { poly, tag, pin };
 }
 
 function addWOOverlay(w){
-  const { Marker3DInteractiveElement, Polyline3DElement } = lib;
+  const { Marker3DInteractiveElement, Polyline3DElement, Polygon3DElement } = lib;
   const m = new Marker3DInteractiveElement({ position:{lat:w.position.lat,lng:w.position.lng,altitude:w.position.alt}, altitudeMode:"RELATIVE_TO_GROUND", extruded:true, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
   const pin = new markerLib.PinElement({ background:S_COLOR[w.status], borderColor:"#0B0F1F", glyphColor:"#0B0F1F", scale:1.0 });
   const t=document.createElement("template"); t.content.append(pin); m.append(t);
-  m.addEventListener("gmp-click", e=>{ e.stopPropagation?.(); openWO(w.id,true); });
+  m.addEventListener("gmp-click", e=>{ if(V.draw||map.classList.contains("placing")) return; e.stopPropagation?.(); openWO(w.id,true); });
   map.append(m);
   const path = new Polyline3DElement({ altitudeMode:"RELATIVE_TO_GROUND", strokeColor:"rgba(45,127,249,0.9)", strokeWidth:3, drawsOccludedSegments:true });
-  const a=A[w.asset]; const r=(a?a.fp/2:6)+12; const n=40;
+  const a=A[w.asset]; const r=(a?a.fp/2:6)+12, n=40;
   path.coordinates = Array.from({length:n+1},(_,i)=>{ const t=i/n*2*Math.PI; return {...offset(w.position.lat,w.position.lng,r*Math.cos(t),r*Math.sin(t)), altitude:w.position.alt+8}; });
-  if(w.status==="in_progress") map.append(path);
-  OV.wo[w.id] = { m, pin, path };
+  if(w.status==="in_progress" && !w.area) map.append(path);
+  let area=null;
+  if(w.area&&w.area.length>=3){
+    area = new Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${S_RGB[w.status]},0.28)`, strokeColor:`rgba(${S_RGB[w.status]},0.95)`, strokeWidth:2 });
+    area.outerCoordinates=[...w.area,w.area[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:w.areaHeight||10}));
+    map.append(area);
+  }
+  OV.wo[w.id] = { m, pin, path, area };
 }
 function refreshWOOverlay(w){
   const o=OV.wo[w.id]; if(!o) return;
   o.pin.background = S_COLOR[w.status];
+  if(o.area){ o.area.fillColor=`rgba(${S_RGB[w.status]},0.28)`; o.area.strokeColor=`rgba(${S_RGB[w.status]},0.95)`; }
   const on=o.path.isConnected;
-  if(w.status==="in_progress"&&!on) map.append(o.path);
-  if(w.status!=="in_progress"&&on) o.path.remove();
+  if(w.status==="in_progress"&&!w.area&&!on) map.append(o.path);
+  if((w.status!=="in_progress"||w.area)&&on) o.path.remove();
   applyLegend();
 }
 function applyLegend(){
-  WOS.forEach(w=>{ const o=OV.wo[w.id]; if(!o) return; const hide=V.legendOff.has(w.status); o.m.style.display = hide?"none":""; if(hide&&o.path.isConnected) o.path.remove(); else if(!hide&&w.status==="in_progress"&&!o.path.isConnected&&map) map.append(o.path); });
+  WOS.forEach(w=>{ const o=OV.wo[w.id]; if(!o) return; const hide=V.legendOff.has(w.status);
+    o.m.style.display = hide?"none":"";
+    if(o.area){ hide?o.area.remove():(!o.area.isConnected&&map.append(o.area)); }
+    if(hide&&o.path.isConnected) o.path.remove(); else if(!hide&&w.status==="in_progress"&&!w.area&&!o.path.isConnected&&map) map.append(o.path); });
 }
 
 function fly(cam, ms=1800){ if(!map) return; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); }
 function flyAsset(a){ fly({ center:{lat:a.lat,lng:a.lng,altitude:a.h*0.5}, range:Math.max(220,a.fp*4+a.h*3), tilt:66, heading:-20 }, 2000); }
-function flyWO(w){ fly({ center:{lat:w.position.lat,lng:w.position.lng,altitude:w.position.alt}, range:200, tilt:70, heading:-30 }, 2000); }
-const siteCam = ()=>({ center:{lat:SITE.center.lat,lng:SITE.center.lng,altitude:0}, range:SITE.range, tilt:SITE.tilt, heading:SITE.heading });
+function flyWO(w){ const r = w.area ? Math.max(220, extentM(bbox(w.area)).ns*3, extentM(bbox(w.area)).ew*3) : 200; fly({ center:{lat:w.position.lat,lng:w.position.lng,altitude:w.position.alt}, range:r, tilt:68, heading:-30 }, 2000); }
 document.querySelectorAll("#hud [data-view]").forEach(b=>b.onclick=()=>{
-  const v=b.dataset.view;
+  const v=b.dataset.view, g=siteGeom();
   if(v==="site") fly(siteCam());
-  if(v==="north") fly({ center:{lat:SITE.center.lat,lng:SITE.center.lng,altitude:0}, range:2400, tilt:60, heading:170 });
-  if(v==="plan") fly({ center:{lat:SITE.center.lat,lng:SITE.center.lng,altitude:0}, range:3000, tilt:0, heading:0 });
+  if(v==="north") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*0.95, tilt:60, heading:170 });
+  if(v==="plan") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*1.05, tilt:0, heading:0 });
 });
-$("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:40000, rounds:1 }),{once:true}); };
+$("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 }),{once:true}); };
 
+/* --- clicks on the map: drawing, placing, or nothing --- */
 function onMapClick(e){
-  if(V.placing && map.classList.contains("placing") && e.position){
-    // click altitude is absolute (ellipsoid); marker altitude is relative to ground, so keep the draft's value
+  if(!e.position) return;
+  const p={ lat:e.position.lat, lng:e.position.lng };
+  if(V.draw){ V.draw.pts.push(p); renderDraw(); return; }
+  if(V.placing && map.classList.contains("placing")){
     const alt = V.placing.pos ? V.placing.pos.alt : V.placing.altDefault;
-    V.placing.pos = { lat:e.position.lat, lng:e.position.lng, alt };
+    V.placing.pos = { ...p, alt };
     map.classList.remove("placing");
     showPlacePin(V.placing.pos);
     renderForm(V.placing.asset);
@@ -479,12 +547,50 @@ function showPlacePin(pos){
   const t=document.createElement("template"); t.content.append(pin); m.append(t);
   map.append(m); placePin=m;
 }
-function setPlacing(on){
+
+/* --- generic polygon drawing (site boundary, work areas) --- */
+function startDraw(kind, opts){
   if(!map) return;
-  map.classList.toggle("placing", !!on);
-  const md=$("#mode");
-  if(on){ md.className="place"; md.querySelector(".mode-tag").textContent="Place work order"; md.querySelector(".mode-txt").innerHTML=`Click the ${on.asset?`<b>${P(on.asset)}</b>`:"map"} where the work is. Marker altitude is set in the form.`; $("#mode-exit").hidden=false; }
+  clearDraw();
+  V.draw = { kind, pts:(opts.initial||[]).map(p=>({lat:p.lat,lng:p.lng})), height:opts.height||0, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label };
+  map.classList.add("drawing");
+  renderDraw();
 }
+function renderDraw(){
+  const d=V.draw; if(!d) return;
+  OV.draw.forEach(x=>x.remove()); OV.draw=[];
+  const { Marker3DElement, Polyline3DElement, Polygon3DElement } = lib;
+  d.pts.forEach((p,i)=>{
+    const m=new Marker3DElement({ position:{lat:p.lat,lng:p.lng,altitude:2}, altitudeMode:"RELATIVE_TO_MESH", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true });
+    const pin=new markerLib.PinElement({ background:"#FF6A00", borderColor:"#0B0F1F", glyphColor:"#0B0F1F", scale:0.8 }); const t=document.createElement("template"); t.content.append(pin); m.append(t);
+    map.append(m); OV.draw.push(m);
+  });
+  if(d.pts.length>=2){
+    const l=new Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(255,106,0,0.95)", strokeWidth:3, drawsOccludedSegments:true });
+    l.coordinates=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>({lat:p.lat,lng:p.lng,altitude:1})); map.append(l); OV.draw.push(l);
+  }
+  if(d.pts.length>=3 && d.height>0){
+    const g=new Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5 });
+    g.outerCoordinates=[...d.pts,d.pts[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:d.height})); map.append(g); OV.draw.push(g);
+  }
+  setMode("draw", d.label, `<b>${d.pts.length}</b> point${d.pts.length===1?"":"s"} · click the map to add corners${d.pts.length<3?" (3 minimum)":""}`, true);
+  $("#draw-acts").hidden=false; $("#draw-done").disabled=d.pts.length<3; $("#draw-undo").disabled=!d.pts.length;
+}
+function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; V.draw=null; map?.classList.remove("drawing"); $("#draw-acts").hidden=true; }
+$("#draw-undo").onclick=()=>{ if(V.draw){ V.draw.pts.pop(); renderDraw(); } };
+$("#draw-done").onclick=()=>{ const d=V.draw; if(!d||d.pts.length<3) return; const pts=d.pts.slice(); clearDraw(); d.onDone(pts); };
+$("#edit-site").onclick=()=>{
+  if(!map) return; setTab("view");
+  startDraw("site", { initial:BOUNDARY, label:"Site boundary", onDone:pts=>{ BOUNDARY=pts; saveSite(); drawSite(); applyCameraLimits(); openSite(true); } });
+  body.innerHTML=`<button class="xclose" data-close>Cancel</button><div class="eyebrow">Site boundary</div><h2>Trace the shoreline</h2>
+  <p class="hint">Click corners around the plant in order. <b>Undo point</b> removes the last one, <b>Finish</b> saves. The existing points are pre-loaded so you can Undo back to a fresh start or just add to them. Camera limits, the mask and the "Site" framing all follow the new boundary.</p>
+  <h3>Current boundary (JSON)</h3><pre class="json">${P(JSON.stringify(BOUNDARY.map(p=>({lat:+p.lat.toFixed(5),lng:+p.lng.toFixed(5)}))))}</pre>
+  <p class="hint">Copy this back to me and I'll bake it into the file so every browser starts with it.</p>
+  <div class="actions"><button class="btn" id="site-clear">Start from scratch</button><button class="btn" id="site-default">Restore default</button></div>`;
+  $("#site-clear").onclick=()=>{ if(V.draw){ V.draw.pts=[]; renderDraw(); } };
+  $("#site-default").onclick=()=>{ BOUNDARY=DEFAULT_BOUNDARY.slice(); saveSite(); clearDraw(); drawSite(); applyCameraLimits(); openSite(true); };
+  fly({ center:{lat:siteGeom().c.lat,lng:siteGeom().c.lng,altitude:0}, range:siteGeom().range*1.05, tilt:0, heading:0 });
+};
 
 /* =====================================================================
    LEFT: ASSET TREE
@@ -492,6 +598,7 @@ function setPlacing(on){
 function renderTree(){
   const q=($("#qtree").value||"").toLowerCase();
   $("#m-assets").textContent = `${ASSETS.length} assets · ${WOS.length} work orders`;
+  const general=WOS.filter(w=>!w.asset);
   $("#tree").innerHTML = AREAS.map(area=>{
     const items=ASSETS.filter(a=>a.area===area && (!q || (a.id+" "+a.name).toLowerCase().includes(q)));
     if(!items.length) return "";
@@ -499,11 +606,12 @@ function renderTree(){
     return `<div class="grp ${open?"open":""}"><div class="grp-h"><span class="tw">▶</span><span class="n">${P(area)}</span><span class="c">${items.length}</span></div><div class="items">${items.map(a=>{
       const n=WOS.filter(w=>w.asset===a.id), o=n.filter(w=>w.status!=="completed").length;
       return `<div class="it ${a.id===V.sel?"sel":""}" data-asset="${P(a.id)}"><span class="tag">${P(a.id)}</span><span class="n" title="${P(a.name)}">${P(a.name)}</span><span class="wo ${o?"open":""}">${o?o+" open":n.length?"✓":""}</span></div>`; }).join("")}</div></div>`;
-  }).join("");
+  }).join("") + (general.length&&!q?`<div class="grp open"><div class="grp-h"><span class="tw">▶</span><span class="n">General site</span><span class="c">${general.length}</span></div><div class="items">${general.map(w=>`<div class="it" data-wo="${P(w.id)}"><span class="tag">${P(w.id.slice(-3))}</span><span class="n" title="${P(w.title)}">${P(w.title)}</span><span class="wo ${w.status!=="completed"?"open":""}">${S_LABEL[w.status]}</span></div>`).join("")}</div></div>`:"");
 }
 $("#tree").addEventListener("click", e=>{
   const h=e.target.closest(".grp-h"); if(h){ h.parentElement.classList.toggle("open"); return; }
-  const it=e.target.closest(".it"); if(it) openAsset(it.dataset.asset,true);
+  const it=e.target.closest(".it"); if(!it) return;
+  if(it.dataset.asset) openAsset(it.dataset.asset,true); else if(it.dataset.wo) openWO(it.dataset.wo,true);
 });
 $("#qtree").oninput=renderTree;
 
@@ -511,8 +619,8 @@ $("#qtree").oninput=renderTree;
    RIGHT PANEL
    ===================================================================== */
 const body=$("#panel-body");
-function setMode(cls, tag, txt, exit){ const md=$("#mode"); md.className=cls; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; }
-$("#mode-exit").onclick=()=>openSite(true);
+function setMode(cls, tag, txt, exit){ const md=$("#mode"); md.className=cls; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
+$("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); if(d?.onCancel) d.onCancel(); else openSite(true); };
 
 function stats(){
   const open=WOS.filter(w=>w.status!=="completed"), late=open.filter(isLate).length;
@@ -522,34 +630,36 @@ function stats(){
 }
 $("#legend").addEventListener("click", e=>{ const s=e.target.closest("[data-s]"); if(!s) return; V.legendOff.has(s.dataset.s)?V.legendOff.delete(s.dataset.s):V.legendOff.add(s.dataset.s); stats(); applyLegend(); });
 
+function leaveEdit(){ V.placing=null; if(placePin){placePin.remove();placePin=null;} map?.classList.remove("placing"); clearDraw(); }
+
 function openSite(flyTo){
-  V.sel=null; V.selWO=null; V.placing=null; if(placePin){placePin.remove();placePin=null;} map?.classList.remove("placing");
-  setMode("plant","Site view","All assets and work orders. Click an asset or a pin to enter Asset view.",false);
+  V.sel=null; V.selWO=null; leaveEdit();
+  setMode("plant","Site view","All assets and work orders. Click an asset, a pin or a work area.",false);
   renderTree(); stats();
   const open=WOS.filter(w=>w.status!=="completed"), late=open.filter(isLate), soon=open.filter(w=>!isLate(w)&&daysUntil(w.requiredBy)<=30);
-  const byAsset=Object.entries(WOS.reduce((m,w)=>{ (m[w.asset]??={n:0,open:0}); m[w.asset].n++; if(w.status!=="completed") m[w.asset].open++; return m; },{})).sort((a,b)=>b[1].open-a[1].open).slice(0,5);
+  const byAsset=Object.entries(WOS.reduce((m,w)=>{ const k=w.asset||"Site"; (m[k]??={n:0,open:0}); m[k].n++; if(w.status!=="completed") m[k].open++; return m; },{})).sort((a,b)=>b[1].open-a[1].open).slice(0,5);
   body.innerHTML=`<div class="eyebrow">Site · ArcelorMittal Dofasco</div><h2>Dispatch board on the map</h2>
-  <p class="hint">${WOS.length} work orders on ${new Set(WOS.map(w=>w.asset)).size} assets, all drone-access candidates: UT grids, spot readings, visuals, IR surveys. Click an asset or a pin to see its orders and raise a new one; the site-wide board is on the <button class="link" data-tab-go="wo">Work Orders</button> tab.</p>
-  <h3>By status · click a legend entry to hide pins</h3><div class="stat" style="margin:6px 0 4px">${STATUSES.map(s=>`<div><b style="color:${S_COLOR[s]}">${WOS.filter(w=>w.status===s).length}</b>${S_LABEL[s]}</div>`).join("")}</div>
+  <p class="hint">${WOS.length} work orders, ${WOS.filter(w=>w.area).length} with a drawn work area. Click an asset, a pin or a work area to open it and raise new work; the site-wide board is on the <button class="link" data-tab-go="wo">Work Orders</button> tab.</p>
+  <h3>By status · click a legend entry to hide</h3><div class="stat" style="margin:6px 0 4px">${STATUSES.map(s=>`<div><b style="color:${S_COLOR[s]}">${WOS.filter(w=>w.status===s).length}</b>${S_LABEL[s]}</div>`).join("")}</div>
   <h3>Due · as of ${iso(TODAY)}</h3><div class="stat" style="margin:6px 0 4px"><div><b class="${late.length?"bad":""}">${late.length}</b>overdue</div><div><b class="mid">${soon.length}</b>due in 30 days</div><div><b>${open.length}</b>open</div><div><b class="bad">${open.filter(w=>w.priority===1).length}</b>priority 1 open</div></div>
   <h3>By type</h3><dl class="kv">${Object.entries(TYPES).map(([k,v])=>`<dt>${P(v)}</dt><dd class="mono">${WOS.filter(w=>w.type===k).length}</dd>`).join("")}</dl>
-  <h3>Assets with the most open work</h3><dl class="kv mono">${byAsset.map(([id,c])=>`<dt><button class="link" data-asset="${P(id)}">${P(id)}</button></dt><dd>${c.open} open · ${c.n} total</dd>`).join("")}</dl>
+  <h3>Most open work</h3><dl class="kv mono">${byAsset.map(([id,c])=>`<dt>${id==="Site"?"General site":`<button class="link" data-asset="${P(id)}">${P(id)}</button>`}</dt><dd>${c.open} open · ${c.n} total</dd>`).join("")}</dl>
   <h3>Raise work</h3><div class="actions"><button class="btn primary" id="wo-new-any">＋ Create work order</button></div>
-  <p class="hint" style="margin-top:12px">Work orders raised here live in this browser only (no backend in the POC). They appear on the map and on the board immediately.</p>`;
-  $("#wo-new-any").onclick=()=>renderForm(null);
+  <p class="hint" style="margin-top:12px">A work order can sit on an asset or anywhere on the site, as a pin or a drawn work area. Kept in this browser only (no backend in the POC).</p>`;
+  $("#wo-new-any").onclick=()=>renderForm("");
   if(flyTo) fly(siteCam());
 }
 
 function openAsset(id, flyTo){
   const a=A[id]; if(!a) return;
-  V.sel=id; V.selWO=null; V.placing=null; if(placePin){placePin.remove();placePin=null;} map?.classList.remove("placing");
+  V.sel=id; V.selWO=null; leaveEdit();
   setMode("asset","Asset view",`<b>${P(a.id)}</b> · ${P(a.name)}`,true);
   renderTree(); stats();
   const wos=WOS.filter(w=>w.asset===id).sort((x,y)=>(x.status==="completed")-(y.status==="completed")||x.priority-y.priority);
   body.innerHTML=`<button class="xclose" data-close>Site view</button><div class="eyebrow">${P(a.area)}</div><h2><span class="mono">${P(a.id)}</span></h2><div class="hint" style="color:var(--ink);font-weight:600">${P(a.name)}</div>
   <h3>Asset</h3><dl class="kv"><dt>Service</dt><dd>${P(a.service)}</dd><dt>Surface</dt><dd>${P(a.surface)}</dd><dt>Height</dt><dd class="mono">${a.h} m</dd><dt>Footprint</dt><dd class="mono">~${a.fp} m</dd><dt>Position</dt><dd class="mono">${a.lat.toFixed(5)}, ${a.lng.toFixed(5)}</dd></dl>
   <h3>Work orders · ${wos.length}${wos.length?` (${wos.filter(w=>w.status!=="completed").length} open)`:""}</h3>
-  <div class="wo-tiles">${wos.map(w=>`<div class="wo-tile wo-${w.status}" data-wo="${P(w.id)}"><span class="t">${P(w.title)}</span><span>${pBadge(w.priority)}</span><span class="s"><span class="mono">${P(w.id)}</span> · ${P(TYPES[w.type]||w.type)} · ${dueTxt(w)} · ${P(w.crew)}</span></div>`).join("")||`<p class="hint">No work orders on this asset.</p>`}</div>
+  <div class="wo-tiles">${wos.map(w=>`<div class="wo-tile wo-${w.status}" data-wo="${P(w.id)}"><span class="t">${P(w.title)}</span><span>${pBadge(w.priority)}</span><span class="s"><span class="mono">${P(w.id)}</span> · ${P(TYPES[w.type]||w.type)} · ${dueTxt(w)} · ${P(w.crew)}${w.area?" · area":""}</span></div>`).join("")||`<p class="hint">No work orders on this asset.</p>`}</div>
   <div class="actions"><button class="btn primary" id="wo-new">＋ Create work order</button><button class="btn" id="fly-a">Fly camera here</button></div>
   <p class="hint" style="margin:12px 0 0">${wos.filter(isLate).length} overdue. Click a tile or a pin to open the order.</p>`;
   $("#wo-new").onclick=()=>renderForm(id);
@@ -559,21 +669,22 @@ function openAsset(id, flyTo){
 
 function openWO(id, flyTo){
   const w=W(id); if(!w) return; const a=A[w.asset]||{};
-  V.sel=w.asset; V.selWO=id; V.placing=null; if(placePin){placePin.remove();placePin=null;} map?.classList.remove("placing");
+  V.sel=w.asset||null; V.selWO=id; leaveEdit();
   setMode("wo","Work order",`<b>${P(w.id)}</b> · ${P(w.title)}`,true);
   renderTree(); stats();
   const n=daysUntil(w.requiredBy);
   const acts=STATUSES.filter(s=>s!==w.status).map(s=>`<button class="btn" data-st="${s}" style="border-color:${S_COLOR[s]};color:${S_COLOR[s]}">${s==="completed"?"Mark completed":s==="in_progress"?"Start":s==="on_hold"?"Put on hold":"Reopen"}</button>`).join("");
+  const where = w.asset ? `<button class="link" data-asset="${P(w.asset)}">${P(w.asset)}</button>` : `general site`;
   body.innerHTML=`<button class="xclose" data-close>Site view</button>
-  <div class="eyebrow">Work order on <button class="link" data-asset="${P(w.asset)}">${P(w.asset)}</button> ${sBadge(w.status)} ${pBadge(w.priority)}</div><h2 class="mono">${P(w.id)}</h2>
+  <div class="eyebrow">Work order on ${where} ${sBadge(w.status)} ${pBadge(w.priority)}</div><h2 class="mono">${P(w.id)}</h2>
   <div class="hint" style="color:var(--ink);font-weight:600">${P(w.title)}</div>
   <div class="hint">${P(TYPES[w.type]||w.type)}${w.task?" · "+P(w.task):""} · raised ${P(w.raised)} by ${P(w.requestedBy)}</div>
   <h3>Status</h3><div class="actions">${acts}</div><div id="wo-hold" hidden class="holdbox"><input id="wo-hold-why" placeholder="why is it on hold? (outage window, access, crew…)"><button class="btn" id="wo-hold-ok">Hold</button></div>${w.holdReason&&w.status==="on_hold"?`<p class="hint" style="margin:6px 0 0;color:var(--wo-on_hold)">On hold: ${P(w.holdReason)}</p>`:""}
   <h3>Schedule</h3><dl class="kv"><dt>Required by</dt><dd><span class="mono">${P(w.requiredBy)}</span> ${w.status==="completed"?"":`<span class="${n<0?"late":""}">(${n<0?Math.abs(n)+" days overdue":n===0?"today":"in "+n+" days"})</span>`}</dd><dt>Planned start</dt><dd class="mono">${P(w.plannedStart||"—")}</dd><dt>Completed</dt><dd class="mono">${P(w.completed||"—")}</dd><dt>Est. hours</dt><dd class="mono">${P(w.estHours||"—")}</dd><dt>Crew</dt><dd>${P(w.crew)}</dd><dt>Access</dt><dd><div class="chips">${accChip(w.access)}</div></dd><dt>System condition</dt><dd>${P(w.condition)}</dd></dl>
   <h3>Scope of work</h3><p style="margin:0;font-size:13px;white-space:pre-wrap">${P(w.scope||"—")}</p>
-  <h3>Location</h3><dl class="kv"><dt>Asset</dt><dd><button class="link" data-asset="${P(w.asset)}">${P(w.asset)}</button> · ${P(a.name||"")}</dd>${a.service?`<dt>Service</dt><dd>${P(a.service)}</dd>`:""}${a.surface?`<dt>Surface</dt><dd>${P(a.surface)}</dd>`:""}<dt>Marker</dt><dd class="mono">${w.position.lat.toFixed(5)}, ${w.position.lng.toFixed(5)} · ${w.position.alt} m above grade</dd></dl>
+  <h3>Location</h3><dl class="kv">${w.asset?`<dt>Asset</dt><dd><button class="link" data-asset="${P(w.asset)}">${P(w.asset)}</button> · ${P(a.name||"")}</dd>`:`<dt>Asset</dt><dd>— (general site)</dd>`}${a.service?`<dt>Service</dt><dd>${P(a.service)}</dd>`:""}<dt>Marker</dt><dd class="mono">${w.position.lat.toFixed(5)}, ${w.position.lng.toFixed(5)} · ${w.position.alt} m above grade</dd>${w.area?`<dt>Work area</dt><dd class="mono">${w.area.length} corners · ${w.areaHeight} m high</dd>`:""}</dl>
   <h3>Log</h3><table class="hist"><tbody>${(w.log||[]).map(r=>`<tr><td class="mono" style="white-space:nowrap;color:var(--ink-2)">${P(r.date)}</td><td>${P(r.note)}</td></tr>`).join("")}</tbody></table>
-  <p style="margin-top:10px"><button class="link" id="flyw">Fly camera to work order</button> · <button class="link" data-asset="${P(w.asset)}">Back to ${P(w.asset)}</button> · <button class="link" data-tab-go="wo">Open on the board</button></p>`;
+  <p style="margin-top:10px"><button class="link" id="flyw">Fly camera to work order</button>${w.asset?` · <button class="link" data-asset="${P(w.asset)}">Back to ${P(w.asset)}</button>`:""} · <button class="link" data-tab-go="wo">Open on the board</button></p>`;
   $("#flyw").onclick=()=>flyWO(w);
   body.querySelectorAll("[data-st]").forEach(b=>b.onclick=()=>{ if(b.dataset.st==="on_hold"){ $("#wo-hold").hidden=false; $("#wo-hold-why").focus(); return; } setStatus(w.id,b.dataset.st); });
   $("#wo-hold-ok").onclick=()=>setStatus(w.id,"on_hold",$("#wo-hold-why").value.trim()||"on hold");
@@ -594,17 +705,19 @@ function setStatus(id, st, reason){
 
 /* ---------- create form ---------- */
 function renderForm(assetId){
+  assetId = assetId||"";
   const a=assetId?A[assetId]:null;
-  const draft = V.placing && V.placing.asset===assetId ? V.placing : (V.placing = {
-    asset:assetId, pos:null, altDefault:a?Math.round(a.h*0.7):20,
+  const draft = (V.placing && V.placing.asset===assetId) ? V.placing : (V.placing = {
+    asset:assetId, pos:null, area:null, areaHeight:a?a.h+4:20, altDefault:a?Math.round(a.h*0.7):20,
     type:"ut", task:TASKS.ut[0], title:"", priority:2, access:"drone", crew:"Skygauge crew A", condition:"in service", estHours:4,
     requiredBy:dplus(21), plannedStart:"", requestedBy:"Inspection (this session)", scope:"",
   });
   if(a && !draft.pos){ draft.pos={lat:a.lat,lng:a.lng,alt:draft.altDefault}; showPlacePin(draft.pos); }
-  setMode("place","New work order",`${a?`On <b>${P(a.id)}</b>. `:""}Use <b>Place on map</b> to move the marker, or keep the asset centre.`,true);
-  body.innerHTML=`<button class="xclose" data-close>Cancel</button><div class="eyebrow">New work order${a?` on ${P(a.id)}`:""}</div><h2>${a?P(a.name):"Choose an asset"}</h2>
+  const placing=map?.classList.contains("placing");
+  if(!V.draw) setMode("place","New work order",`${a?`On <b>${P(a.id)}</b>. `:"Anywhere on the site. "}<b>Place pin</b> for a point, <b>Draw area</b> for a box with any number of corners.`,true);
+  body.innerHTML=`<button class="xclose" data-close>Cancel</button><div class="eyebrow">New work order${a?` on ${P(a.id)}`:" · general site"}</div><h2>${a?P(a.name):"Work anywhere on the site"}</h2>
   <div class="form">
-    <label class="full">Asset<select id="wf-asset">${a?"":`<option value="">— select —</option>`}${ASSETS.map(x=>`<option value="${x.id}" ${x.id===assetId?"selected":""}>${x.id} · ${P(x.name)}</option>`).join("")}</select></label>
+    <label class="full">Asset<select id="wf-asset"><option value="" ${assetId?"":"selected"}>— none · general site —</option>${ASSETS.map(x=>`<option value="${x.id}" ${x.id===assetId?"selected":""}>${x.id} · ${P(x.name)}</option>`).join("")}</select></label>
     <label>Type<select id="wf-type">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${draft.type===k?"selected":""}>${P(v)}</option>`).join("")}</select></label>
     <label>Task<select id="wf-task">${TASKS[draft.type].map(t=>`<option ${draft.task===t?"selected":""}>${P(t)}</option>`).join("")}</select></label>
     <label class="full">Title<input id="wf-title" value="${P(draft.title)}" placeholder="${P(draft.task)}${a?" — "+P(a.id):""}"></label>
@@ -616,31 +729,40 @@ function renderForm(assetId){
     <label>Est. hours<input id="wf-hrs" type="number" min="0.5" step="0.5" value="${P(draft.estHours)}"></label>
     <label>System condition<select id="wf-cond">${CONDITIONS.map(c=>`<option ${draft.condition===c?"selected":""}>${P(c)}</option>`).join("")}</select></label>
     <label>Requested by<input id="wf-by" value="${P(draft.requestedBy)}"></label>
-    <label>Marker altitude (m)<input id="wf-alt" type="number" min="0" step="1" value="${draft.pos?draft.pos.alt:draft.altDefault}"></label>
+    <label>Pin altitude (m)<input id="wf-alt" type="number" min="0" step="1" value="${draft.pos?draft.pos.alt:draft.altDefault}"></label>
+    <label>Area height (m)<input id="wf-ah" type="number" min="1" step="1" value="${P(draft.areaHeight)}"></label>
     <label class="full">Scope of work<textarea id="wf-scope" placeholder="what, where, how big, what to report">${P(draft.scope)}</textarea></label>
   </div>
-  <div class="place ${draft.pos?"set":""}" id="place"><span>${draft.pos?`Marker at <span class="mono">${draft.pos.lat.toFixed(5)}, ${draft.pos.lng.toFixed(5)}</span>`:"No marker yet"}</span><button class="btn ${map?.classList.contains("placing")?"arm":""}" id="place-btn">${map?.classList.contains("placing")?"Click the map…":"Place on map"}</button></div>
-  <div class="actions"><button class="btn primary" id="wo-create" ${draft.pos&&assetId?"":"disabled"}>Create work order</button><button class="btn" id="wo-cancel">Cancel</button></div>
-  <p class="hint" style="margin:8px 0 0">Raised on the demo clock (${iso(TODAY)}), status Outstanding. Kept in this browser only.</p>`;
-  const g=()=>{ Object.assign(draft,{ type:$("#wf-type").value, task:$("#wf-task").value, title:$("#wf-title").value, priority:+$("#wf-pri").value, access:$("#wf-acc").value, crew:$("#wf-crew").value, condition:$("#wf-cond").value, estHours:+$("#wf-hrs").value, requiredBy:$("#wf-req").value, plannedStart:$("#wf-start").value, requestedBy:$("#wf-by").value, scope:$("#wf-scope").value }); if(draft.pos){ draft.pos.alt=+$("#wf-alt").value||0; } };
+  <div class="place ${draft.pos?"set":""} ${placing?"arm":""}" id="place"><span>${draft.pos?`Pin at <span class="mono">${draft.pos.lat.toFixed(5)}, ${draft.pos.lng.toFixed(5)}</span>`:"No pin yet"}</span><div class="btns"><button class="btn sm ${placing?"arm":""}" id="place-btn">${placing?"Click the map…":"Place pin"}</button></div></div>
+  <div class="place ${draft.area?"set":""}" id="area"><span>${draft.area?`Work area · <span class="mono">${draft.area.length}</span> corners · ${P(draft.areaHeight)} m`:"No work area (optional)"}</span><div class="btns"><button class="btn sm" id="area-btn">${draft.area?"Redraw area":"Draw area"}</button>${draft.area?`<button class="btn sm" id="area-clear">Clear</button>`:""}</div></div>
+  <div class="actions"><button class="btn primary" id="wo-create" ${(draft.pos||draft.area)?"":"disabled"}>Create work order</button><button class="btn" id="wo-cancel">Cancel</button></div>
+  <p class="hint" style="margin:8px 0 0">Raised on the demo clock (${iso(TODAY)}), status Outstanding. A pin or a work area is required; with only an area, the pin sits at its centre.</p>`;
+  const g=()=>{ Object.assign(draft,{ type:$("#wf-type").value, task:$("#wf-task").value, title:$("#wf-title").value, priority:+$("#wf-pri").value, access:$("#wf-acc").value, crew:$("#wf-crew").value, condition:$("#wf-cond").value, estHours:+$("#wf-hrs").value, requiredBy:$("#wf-req").value, plannedStart:$("#wf-start").value, requestedBy:$("#wf-by").value, scope:$("#wf-scope").value, areaHeight:+$("#wf-ah").value||10 }); if(draft.pos){ draft.pos.alt=+$("#wf-alt").value||0; } };
   body.querySelectorAll(".form input,.form select,.form textarea").forEach(el=>el.addEventListener("input",g));
-  $("#wf-asset").onchange=()=>{ g(); const id=$("#wf-asset").value||null; V.placing=null; if(placePin){placePin.remove();placePin=null;} map?.classList.remove("placing"); renderForm(id); if(id) flyAsset(A[id]); };
+  $("#wf-asset").onchange=()=>{ g(); const id=$("#wf-asset").value; leaveEdit(); renderForm(id); if(id) flyAsset(A[id]); };
   $("#wf-type").onchange=()=>{ g(); draft.task=TASKS[draft.type][0]; renderForm(assetId); };
   $("#wf-alt").onchange=()=>{ g(); if(draft.pos) showPlacePin(draft.pos); };
-  $("#place-btn").onclick=()=>{ const on=!map?.classList.contains("placing"); if(on){ setPlacing(draft); $("#place-btn").textContent="Click the map…"; $("#place-btn").classList.add("arm"); $("#place").classList.add("arm"); } else { map.classList.remove("placing"); renderForm(assetId); } };
-  $("#wo-cancel").onclick=()=>assetId?openAsset(assetId,false):openSite(false);
+  $("#place-btn").onclick=()=>{ if(!map) return; g(); const on=!map.classList.contains("placing"); clearDraw(); if(on){ map.classList.add("placing"); setMode("place","Place pin",`Click the ${a?`<b>${P(a.id)}</b>`:"map"} where the work is.`,true); } else { map.classList.remove("placing"); } renderForm(assetId); };
+  $("#area-btn").onclick=()=>{ if(!map) return; g(); map.classList.remove("placing");
+    startDraw("area",{ initial:draft.area||[], height:draft.areaHeight, label:"Draw work area",
+      onDone:pts=>{ draft.area=pts; if(!draft.pos){ const c=centroid(pts); draft.pos={...c,alt:draft.areaHeight+2}; showPlacePin(draft.pos); } renderForm(assetId); },
+      onCancel:()=>renderForm(assetId) }); };
+  if($("#area-clear")) $("#area-clear").onclick=()=>{ g(); draft.area=null; renderForm(assetId); };
+  $("#wo-cancel").onclick=()=>{ leaveEdit(); assetId?openAsset(assetId,false):openSite(false); };
   $("#wo-create").onclick=()=>{
-    g(); if(!assetId||!draft.pos) return;
-    const w={ id:nextId(), asset:assetId, type:draft.type, task:draft.task, title:draft.title||`${draft.task} — ${assetId}`, priority:draft.priority, status:"outstanding",
+    g(); if(!draft.pos&&!draft.area) return;
+    const pos = draft.pos || {...centroid(draft.area), alt:draft.areaHeight+2};
+    const w={ id:nextId(), asset:assetId, type:draft.type, task:draft.task, title:draft.title||`${draft.task}${assetId?" — "+assetId:""}`, priority:draft.priority, status:"outstanding",
       access:draft.access, crew:draft.crew, condition:draft.condition, estHours:draft.estHours, requiredBy:draft.requiredBy||dplus(21), plannedStart:draft.plannedStart, completed:"",
-      requestedBy:draft.requestedBy||"Inspection", raised:iso(TODAY), scope:draft.scope, holdReason:"", position:{...draft.pos}, log:[{date:iso(TODAY),note:"Raised by "+(draft.requestedBy||"Inspection")}] };
-    WOS.push(w); save(); addWOOverlay(w); if(placePin){placePin.remove();placePin=null;} map?.classList.remove("placing"); V.placing=null;
+      requestedBy:draft.requestedBy||"Inspection", raised:iso(TODAY), scope:draft.scope, holdReason:"", position:pos, area:draft.area, areaHeight:draft.area?draft.areaHeight:0,
+      log:[{date:iso(TODAY),note:"Raised by "+(draft.requestedBy||"Inspection")}] };
+    WOS.push(w); save(); addWOOverlay(w); leaveEdit();
     stats(); renderTree(); openWO(w.id,true);
   };
 }
 
 body.addEventListener("click", e=>{
-  const c=e.target.closest("[data-close]"); if(c){ openSite(false); return; }
+  const c=e.target.closest("[data-close]"); if(c){ leaveEdit(); openSite(false); return; }
   const a=e.target.closest("[data-asset]"); if(a){ openAsset(a.dataset.asset,true); return; }
   const t=e.target.closest(".wo-tile"); if(t){ openWO(t.dataset.wo,true); return; }
   const g=e.target.closest("[data-tab-go]"); if(g){ setTab(g.dataset.tabGo); }
@@ -662,7 +784,7 @@ function filtered(){
 }
 function renderBoard(){
   const rows=filtered(), f=V.filt;
-  $("#page").innerHTML=`<h2>Work orders · site board</h2><p class="hint">Drag a card between columns to change its status, or use the selector on the card. "Open" jumps to the order in the viewer.</p>
+  $("#page").innerHTML=`<h2>Work orders · site board</h2><p class="hint">Drag a card between columns to change its status, or use the selector on the card. "Open in viewer" flies to the pin or work area.</p>
   <div class="filters">
     <select id="k-type" class="btn"><option value="">All types</option>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${f.type===k?"selected":""}>${P(v)}</option>`).join("")}</select>
     <select id="k-prio" class="btn"><option value="">All priorities</option>${[1,2,3].map(p=>`<option value="${p}" ${f.prio==p?"selected":""}>P${p}</option>`).join("")}</select>
@@ -677,7 +799,7 @@ function renderBoard(){
   $("#k-prio").onchange=e=>{f.prio=e.target.value;renderBoard();};
   $("#k-late").onchange=e=>{f.late=e.target.checked;renderBoard();};
   $("#k-q").oninput=e=>{f.q=e.target.value;renderBoard(); const i=$("#k-q"); i.focus(); i.setSelectionRange(i.value.length,i.value.length);};
-  $("#k-new").onclick=()=>{ setTab("view"); renderForm(V.sel); };
+  $("#k-new").onclick=()=>{ setTab("view"); renderForm(V.sel||""); };
   $("#page").querySelectorAll(".kcard").forEach(c=>{
     c.addEventListener("dragstart",e=>{ e.dataTransfer.setData("text/plain",c.dataset.wo); c.classList.add("drag"); });
     c.addEventListener("dragend",()=>c.classList.remove("drag"));
@@ -694,7 +816,7 @@ function card(w){
   return `<div class="kcard" draggable="true" data-wo="${P(w.id)}" title="Drag to another column or open in the viewer">
     <div class="h"><span class="id">${P(w.id)}</span>${pBadge(w.priority)}</div>
     <span class="t">${P(w.title)}</span>
-    <div class="m"><span class="mono">${P(w.asset)}</span><span>${P(TYPES[w.type]||w.type)}</span><span>${dueTxt(w)}</span></div>
+    <div class="m">${whereTxt(w)}<span>${P(TYPES[w.type]||w.type)}</span><span>${dueTxt(w)}</span>${w.area?`<span title="Has a drawn work area">▭ area</span>`:""}</div>
     <div class="m"><span>${P(w.crew)}</span><span class="acc-${w.access}"><span class="acc-dot"></span>${P(ACCESS[w.access]||"")}</span>${w.status==="on_hold"&&w.holdReason?`<span style="color:var(--wo-on_hold)">${P(w.holdReason)}</span>`:""}</div>
     <div class="f"><select aria-label="Status">${STATUSES.map(s=>`<option value="${s}" ${w.status===s?"selected":""}>${S_LABEL[s]}</option>`).join("")}</select><button class="link open">Open in viewer →</button></div>
   </div>`;
@@ -707,14 +829,14 @@ $("#q").oninput=()=>{
   const q=$("#q").value.trim().toLowerCase(), hits=$("#hits");
   if(!q){ hits.hidden=true; return; }
   const as=ASSETS.filter(a=>(a.id+" "+a.name).toLowerCase().includes(q)).slice(0,6).map(a=>`<div data-asset="${P(a.id)}"><span class="mono">${P(a.id)}</span><small>${P(a.name)}</small></div>`);
-  const ws=WOS.filter(w=>(w.id+" "+w.title+" "+w.asset).toLowerCase().includes(q)).slice(0,6).map(w=>`<div data-wo="${P(w.id)}"><span class="mono">${P(w.id)}</span><small>${P(w.title)} · ${P(w.asset)}</small></div>`);
+  const ws=WOS.filter(w=>(w.id+" "+w.title+" "+w.asset).toLowerCase().includes(q)).slice(0,6).map(w=>`<div data-wo="${P(w.id)}"><span class="mono">${P(w.id)}</span><small>${P(w.title)} · ${P(w.asset||"site")}</small></div>`);
   hits.innerHTML=[...as,...ws].join("")||`<div><small>No matches</small></div>`; hits.hidden=false;
 };
 $("#hits").onclick=e=>{ const d=e.target.closest("[data-asset],[data-wo]"); if(!d) return; $("#hits").hidden=true; $("#q").value=""; setTab("view"); d.dataset.asset?openAsset(d.dataset.asset,true):openWO(d.dataset.wo,true); };
 document.addEventListener("click",e=>{ if(!e.target.closest("#search")) $("#hits").hidden=true; });
 
 /* ---------- boot ---------- */
-renderTree(); stats(); openSite(false); initMap();
+renderTree(); stats(); openSite(false); $("#m-extent").textContent=`${(siteGeom().e.ns/1000).toFixed(1)} × ${(siteGeom().e.ew/1000).toFixed(1)} km · ${BOUNDARY.length} boundary points`; initMap();
 </script>
 </body>
 </html>
