@@ -21,7 +21,7 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%}
-body{margin:0;background:var(--ground);color:var(--ink);font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;height:100vh}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,sans-serif;font-size:14px;line-height:1.5;overflow:hidden;display:flex;flex-direction:column;height:100vh;height:100dvh}
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
 button{font:inherit;color:inherit}
 button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:none;box-shadow:0 0 0 3px rgba(75,30,171,.35)}
@@ -229,7 +229,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 
 .handle{display:none}
 @media (max-width:860px){
-  :root{--sheet-peek:132px;--sheet-half:52vh}
+  :root{--sheet-peek:calc(132px + env(safe-area-inset-bottom,0px));--sheet-half:52dvh;--sab:env(safe-area-inset-bottom,0px)}
   html{-webkit-text-size-adjust:100%} input,textarea,select{font-size:16px!important}
   .btn,.kadd,.mi,.ptrow,.it{min-height:44px} .btn.sm{min-height:40px;padding:8px 12px;font-size:13px}
   #bar{padding:6px 10px;gap:8px;flex-wrap:nowrap} #bar h1{display:none} .tabs button{padding:8px 12px}
@@ -237,9 +237,9 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   #search-toggle{display:inline-block!important;margin-left:auto;padding:6px 10px} #userbtn span:last-child{display:none} #userbtn{padding:2px}
   #view-map{display:block} #canvas-wrap{position:absolute;inset:0}
   /* register = bottom sheet */
-  #reg{display:flex;position:absolute;left:0;right:0;bottom:0;height:64px;border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.25);z-index:9;transition:height .22s ease;overflow:hidden}
-  #reg.open{height:62vh} #reg .title,#reg .sub,#tree,#reg .foot,#reg .reg-cta{display:none} #reg.open .title,#reg.open .sub,#reg.open #tree,#reg.open .reg-cta{display:block} #reg.open .sub{display:flex} #reg.open .foot{display:block}
-  #reg .reg-cta{position:sticky;bottom:0} #reg.open .handle .mini{display:none!important}
+  #reg{display:flex;position:absolute;left:0;right:0;bottom:0;height:calc(64px + var(--sab));padding-bottom:var(--sab);border-left:0;border-top:1px solid var(--line);border-radius:14px 14px 0 0;box-shadow:0 -8px 24px rgba(0,0,0,.25);z-index:9;transition:height .22s ease;overflow:hidden}
+  #reg.open{height:62dvh} #reg .title,#reg .sub,#tree,#reg .foot,#reg .reg-cta{display:none} #reg.open .title,#reg.open .sub,#reg.open #tree,#reg.open .reg-cta{display:block} #reg.open .sub{display:flex} #reg.open .foot{display:block}
+  #reg .reg-cta{position:sticky;bottom:0;padding-bottom:calc(10px + var(--sab))} #reg.open .handle .mini{display:none!important}
   .btn.mini{display:inline-flex!important;align-items:center;justify-content:center;width:44px;min-height:44px;padding:0;font-size:22px;font-weight:600;margin-left:auto;margin-right:8px;border-radius:12px}
   .handle{touch-action:none;user-select:none} #peek .ph{touch-action:pan-x} #reg.dragging,#peek.dragging{transition:none!important}
   #reg .title{padding:6px 14px 8px}
@@ -253,7 +253,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   #peek.on{transform:none} #peek[data-sheet="peek"]{height:var(--sheet-peek)} #peek[data-sheet="full"]{height:calc(100% - 0px);border-radius:0}
   #peek .handle{padding:6px 14px 0;min-height:18px} #peek .ph{padding:6px 10px;flex-wrap:wrap;gap:6px} #peek .ph .id{width:100%;font-size:11px}
   #pk-size{display:inline-block!important} #peek[data-sheet="full"] #pk-size{transform:rotate(180deg)}
-  #pbody{padding:10px 14px 60px}
+  #pbody{padding:10px 14px calc(60px + var(--sab))}
   body.wo-view[data-tab="map"] #peek{box-shadow:0 -8px 24px rgba(0,0,0,.3)} #peek-slot{display:none!important}
   .prop{grid-template-columns:1fr} .prop .pn{padding-bottom:0} .ptitle{font-size:20px}
   /* map chrome */
@@ -261,17 +261,17 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   #draw-acts{position:fixed;left:12px;right:12px;bottom:calc(var(--sheet-peek) + 12px);z-index:40;display:flex!important;gap:10px;justify-content:stretch}
   #draw-acts[hidden]{display:none!important} #draw-acts .btn{flex:1;min-height:52px;font-size:15px;font-weight:600;box-shadow:var(--shadow)}
   body:not(.wo-view) #draw-acts{bottom:76px}
-  #hud{left:auto;right:8px;top:auto;bottom:calc(64px + 12px);flex-direction:column;gap:6px} body.wo-view #hud{display:none} #hud [data-view="north"],#hud [data-view="plan"]{display:none}
+  #hud{left:auto;right:8px;top:auto;bottom:calc(76px + var(--sab));flex-direction:column;gap:6px} body.wo-view #hud{display:none} #hud [data-view="north"],#hud [data-view="plan"]{display:none}
   #legend{display:none}
   /* the map container ends where the sheet begins, so the camera centre (the work order) sits in the visible area */
-  #canvas-wrap{bottom:64px} body.wo-view #canvas-wrap{bottom:var(--sheet-half)} body.wo-view[data-sheet="peek"] #canvas-wrap{bottom:var(--sheet-peek)} body.wo-view[data-sheet="full"] #canvas-wrap{bottom:var(--sheet-half)}
+  #canvas-wrap{bottom:calc(64px + var(--sab))} body.wo-view #canvas-wrap{bottom:var(--sheet-half)} body.wo-view[data-sheet="peek"] #canvas-wrap{bottom:var(--sheet-peek)} body.wo-view[data-sheet="full"] #canvas-wrap{bottom:var(--sheet-half)}
   body.wo-view #canvas-wrap,#canvas-wrap{transition:bottom .22s ease}
   #draw-acts{bottom:calc(var(--sheet-peek) + 12px)}
   /* menus as bottom sheets */
-  .pop{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;max-width:none;width:100%;max-height:70vh;border-radius:14px 14px 0 0;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.4)}
+  .pop{position:fixed!important;left:0!important;right:0!important;bottom:0!important;top:auto!important;max-width:none;width:100%;max-height:70dvh;border-radius:14px 14px 0 0;padding:10px 10px calc(10px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 30px rgba(0,0,0,.4)}
   .pop .mi{min-height:44px;font-size:15px} .pop .pin{font-size:16px;padding:10px 8px}
   /* work orders tab */
-  .toolbar{padding:8px 10px;gap:6px} #views{padding:10px;overflow-x:auto} .kanban{scroll-snap-type:x mandatory;gap:10px} .kcol{flex:0 0 88vw;scroll-snap-align:start;max-height:calc(100vh - 170px)}
+  .toolbar{padding:8px 10px;gap:6px} #views{padding:10px;overflow-x:auto} .kanban{scroll-snap-type:x mandatory;gap:10px} .kcol{flex:0 0 88vw;scroll-snap-align:start;max-height:calc(100dvh - 170px)}
   .tbl th,.tbl td{max-width:200px} .thumbs{grid-template-columns:repeat(3,1fr)}
   .locbox .acts{flex-direction:column;align-items:stretch} .locbox .acts .btn{width:100%} .locbox .acts label{justify-content:space-between} #l-fly{margin-left:0!important}
   .ptrow{padding:6px 8px} .ptrow .btn{min-height:40px}
@@ -1177,7 +1177,7 @@ async function initMap(){
   $("#mapgate").hidden=true; $("#loading").hidden=false;
   try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); }catch(e){ showMapGate("Could not load Google Maps: "+(e.message||e)); return; }
   const cam=siteCam(), g=siteGeom();
-  map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", gestureHandling:"GREEDY" });   // GREEDY = plain Google Maps gestures: scroll zooms without a modifier key, one-finger drag pans. AUTO falls back to "cooperative" (⌘+scroll) in some layouts.
+  map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", gestureHandling:"GREEDY", defaultUIDisabled:true });   // no Google on-screen buttons (zoom/pan/tilt/compass); gestures only   // GREEDY = plain Google Maps gestures: scroll zooms without a modifier key, one-finger drag pans. AUTO falls back to "cooperative" (⌘+scroll) in some layouts.
   map.addEventListener("gmp-error",e=>showMapGate("Map error: "+(e.detail?.message||"see console")));
   map.addEventListener("gmp-click",onMapClick); installLock();
   map.addEventListener("dblclick",()=>{ if(S.woView&&S.open&&!V.draw&&!V.placing){ const w=W(S.open); if(w) flyWO(w); } });
