@@ -66,6 +66,9 @@ body.wo-view #reg{display:none}
 body.wo-view #peek-slot{display:block!important}
 body.wo-view[data-tab="map"] #peek{box-shadow:none}
 body.wo-view[data-tab="map"] #pk-close{display:none}
+body.wo-view[data-tab="map"] #pk-fly{display:none}
+body.wo-view[data-tab="map"] #pk-exit{display:inline-block!important}
+#site-view{display:none!important}
 #mode .btn.teal{box-shadow:none}
 #reg{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 #reg .title{padding:12px 14px 10px;border-bottom:1px solid var(--line)}
@@ -84,6 +87,7 @@ body.wo-view[data-tab="map"] #pk-close{display:none}
 #canvas-wrap{position:relative;min-width:0;min-height:0;background:var(--canvas)}
 gmp-map-3d{position:absolute;inset:0;width:100%;height:100%}
 gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
+#orbit{position:absolute;inset:0;z-index:5;cursor:grab;touch-action:none;background:transparent}#orbit.drag{cursor:grabbing}
 #hud{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:6}
 #hud .btn{box-shadow:var(--shadow)}
 #mode{position:absolute;left:12px;top:12px;z-index:8;display:flex;align-items:center;gap:10px;padding:6px 8px 6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:12px;color:var(--ink-2);max-width:min(92%,620px);flex-wrap:wrap}
@@ -256,6 +260,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
     <div id="canvas-wrap">
       <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a work area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Finish</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
       <div id="hud"><button class="btn" data-view="site" title="Recommended framing: the whole site">Site</button><button class="btn" data-view="north">From harbour</button><button class="btn" data-view="plan">Plan</button><button class="btn" id="b-orbit">Orbit</button></div>
+      <div id="orbit" hidden title="Drag to rotate · wheel or pinch to zoom"></div>
       <div id="legend"></div>
       <div id="loading"><div>Loading photorealistic 3D…</div><div class="bar"><i></i></div></div>
       <div id="mapgate" hidden><div class="box">
@@ -293,7 +298,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
   </div>
 
   <aside id="peek" aria-label="Work order">
-    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" hidden title="Changes save automatically">Save</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
+    <div class="ph"><span class="id" id="pk-id"></span><button class="btn save" id="pk-save" hidden title="Changes save automatically">Save</button><button class="btn teal" id="pk-fly" title="Fly the map to this work order">Fly to</button><button class="btn teal" id="pk-exit" hidden>Exit Work Order</button><button class="btn" id="pk-more">···</button><button class="btn" id="pk-close" title="Close (Esc)">✕</button></div>
     <div id="pbody"></div>
   </aside>
 </div>
@@ -1050,7 +1055,7 @@ function wireUI(){
   $("#b-props").onclick=e=>propsToggle(e.currentTarget);
   $("#b-export").onclick=exportJSON;
   $("#pk-close").onclick=closePeek; $("#pk-more").onclick=e=>recordMenu(e.currentTarget); $("#pk-fly").onclick=()=>{ const w=W(S.open); if(w) enterWOView(w.id); };
-  $("#site-view").onclick=exitWOView;
+  $("#site-view").onclick=exitWOView; $("#pk-exit").onclick=exitWOView;
   $("#userbtn").onclick=e=>userMenu(e.currentTarget);
   $("#new-asset").onclick=e=>assetEditor(null,e.currentTarget);
   document.addEventListener("pointerdown",e=>{ // click outside the peek closes it (V11) — not on popovers, map or toolbar buttons
@@ -1147,7 +1152,7 @@ function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o)
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
-function fly(cam,ms=1800){ if(!map) return; flying=true; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); map.addEventListener("gmp-animationend",()=>{ flying=false; },{once:true}); }
+function fly(cam,ms=1800){ if(!map) return; flying=true; map.flyCameraTo({ endCamera:cam, durationMillis:ms }); clearTimeout(flyT); flyT=setTimeout(()=>{ flying=false; },ms+150); map.addEventListener("gmp-animationend",()=>{ flying=false; },{once:true}); }
 function flyAsset(a){ fly({ center:{lat:a.lat,lng:a.lng,altitude:(a.ground??GROUND_FALLBACK)+(a.h||10)*0.5}, range:Math.max(220,(a.fp||10)*4+(a.h||10)*3), tilt:66, heading:-20 },2000); }
 const GROUND_FALLBACK=80; // m above sea level at the Dofasco works when a pin has no recorded ground elevation
 function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
@@ -1155,8 +1160,8 @@ function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
   const ext=P.length>=2?Math.max(extentM(bbox(P)).ns,extentM(bbox(P)).ew):0;
   const r=P.length===1?110:Math.max(100,ext*1.8);
   const cam={ center:{lat:a.lat,lng:a.lng,altitude:alt}, range:r, tilt:62, heading:map.heading??-30 };
-  flying=true; LOCK=null; map.flyCameraTo({ endCamera:cam, durationMillis:1600 });
-  map.addEventListener("gmp-animationend",()=>{ flying=false; if(S.woView&&S.open===w.id) lockTo(cam); },{once:true});
+  flying=true; LOCK=S.woView?{ ...cam.center }:null; orbitSync(); map.flyCameraTo({ endCamera:cam, durationMillis:1600 });
+  clearTimeout(flyT); const done=()=>{ flying=false; if(S.woView&&S.open===w.id){ LOCK={ ...cam.center }; map.center=LOCK; } orbitSync(); }; flyT=setTimeout(done,1750); map.addEventListener("gmp-animationend",done,{once:true});
 }
 $$("#hud [data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view, g=siteGeom(); if(v==="site") fly(siteCam()); if(v==="north") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*0.95, tilt:60, heading:170 }); if(v==="plan") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*1.05, tilt:0, heading:0 }); });
 $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventListener("gmp-animationend",()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 }),{once:true}); };
@@ -1164,18 +1169,18 @@ $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); map.addEventLi
 /* ---------- mode bar, placing and drawing ---------- */
 function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
 function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view","Click a pin or a work area to open it.",false); }
-$("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); };
+$("#mode-exit").onclick=()=>{ const d=V.draw; clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round(e.position.altitude||0) };
   if(V.draw){ if(!inPoly(p,BOUNDARY())&&V.draw.kind!=="site"){ toast("Outside the site boundary.",true); return; } V.draw.pts.push(p); renderDraw(); return; }
-  if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); }
+  if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); orbitSync(); }
 }
 /* ---------- location points: add (continuous), move, remove, select ---------- */
 function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } setTab("map"); clearPointHandles();
   startDraw("points",{ initial:pts(w), height:locHeight(w), label:"Location", min:1, onDone:p=>{ setPoints(id,p); syncPointHandles(); relock(); }, onCancel:()=>{ syncPointHandles(); relock(); } }); }
 function relock(){ if(S.woView&&S.open&&map){ const w=W(S.open); if(w&&pts(w).length) flyWO(w); } }
 function movePoint(id,i){ const w=W(id); if(!w||!map){ toast("The map is not loaded.",true); return; } setTab("map"); selPt=i; syncPointHandles();
-  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); setMode("place",`Point ${i+1}`,`Click the model where point <b>${i+1}</b> should be.`,true); }
+  V.placing={ onPlace:p=>{ const P=pts(w).slice(); P[i]={ ...P[i], lat:p.lat, lng:p.lng, ground:p.ground }; setPoints(id,P); selPt=null; syncPointHandles(); relock(); } }; map.classList.add("placing"); orbitSync(); setMode("place",`Point ${i+1}`,`Click the model where point <b>${i+1}</b> should be.`,true); }
 function selectPoint(i){ selPt=selPt===i?null:i; syncPointHandles(); if(S.open) renderRecord(); const w=W(S.open); if(selPt!=null&&w){ const p=pts(w)[selPt]; if(p&&map){ fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } } }
 /* numbered handles for the open record's points; click → select, then Move / Remove in the mode bar */
 const PTH=[];
@@ -1184,7 +1189,7 @@ function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw
   P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:{lat:p.lat,lng:p.lng,altitude:P.length===1?(p.alt||0)+0.5:1}, altitudeMode:"RELATIVE_TO_GROUND", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate(selPt===i?"#00FFE5":"#FF6A00",0.7).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
   if(selPt!=null&&!V.placing){ setMode("place",`Point ${selPt+1} of ${P.length}`,`<button class="btn sm" id="pt-move">Move</button> <button class="btn sm danger" id="pt-rm">Remove</button>`,true); $("#pt-move").onclick=()=>movePoint(w.id,selPt); $("#pt-rm").onclick=()=>{ const Q=P.slice(); Q.splice(selPt,1); selPt=null; setPoints(w.id,Q); resetMode(); }; }
   else if(!V.placing) resetMode(); }
-function startDraw(kind,opts){ clearDraw(); V.draw={ kind, pts:(opts.initial||[]).map(p=>({lat:p.lat,lng:p.lng,ground:p.ground,alt:p.alt})), height:opts.height||0, min:opts.min||3, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
+function startDraw(kind,opts){ clearDraw(); $("#orbit").hidden=true; V.draw={ kind, pts:(opts.initial||[]).map(p=>({lat:p.lat,lng:p.lng,ground:p.ground,alt:p.alt})), height:opts.height||0, min:opts.min||3, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   d.pts.forEach((p,i)=>{ const m=new lib.Marker3DElement({ position:{lat:p.lat,lng:p.lng,altitude:2}, altitudeMode:"RELATIVE_TO_MESH", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate("#FF6A00",0.8).tpl); map.append(m); OV.draw.push(m); });
@@ -1194,7 +1199,7 @@ function renderDraw(){
   setMode("draw",d.label,`<b>${n}</b> point${n===1?"":"s"}${kind} · click the model to add${d.kind==="site"&&n<3?" (3 minimum)":""}`,true);
   $("#draw-acts").hidden=false; $("#draw-done").disabled=n<d.min; $("#draw-undo").disabled=!n;
 }
-function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; V.draw=null; map?.classList.remove("drawing"); $("#draw-acts").hidden=true; }
+function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; V.draw=null; map?.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
 $("#draw-undo").onclick=()=>{ if(V.draw){ V.draw.pts.pop(); renderDraw(); } };
 $("#draw-done").onclick=()=>{ const d=V.draw; if(!d||d.pts.length<d.min) return; const P=d.pts.slice(); clearDraw(); resetMode(); d.onDone(P); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
@@ -1219,19 +1224,30 @@ function assetEditor(a,anchor,opts={}){
   const read=()=>({ tag:el.querySelector("#a-tag").value.trim().toUpperCase(), name:el.querySelector("#a-name").value.trim(), area:el.querySelector("#a-area").value.trim(), h:+el.querySelector("#a-h").value||10, fp:+el.querySelector("#a-fp").value||10 });
   const save=async()=>{ const d=read(); if(!d.tag||!d.name){ toast("Tag and name are required.",true); return; } if(isNew&&asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } if(!pos){ toast("Set the position by clicking the map.",true); return; } await DB.set(AS_COL+"/"+d.tag,{ ...d, lat:pos.lat, lng:pos.lng }); closePop(); toast(`Asset ${d.tag} saved.`); if(isNew) onCreate?.(d.tag); };
   el.querySelector("#a-save").onclick=save;
-  el.querySelector("#a-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } const draft={ ...read(), pos }; closePop(); setTab("map"); V.placing={ onPlace:async p=>{ if(isNew){ const d=draft; if(!d.tag||!d.name){ toast("Tag and name are required — reopen ＋ Asset.",true); return; } if(asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } await DB.set(AS_COL+"/"+d.tag,{ tag:d.tag,name:d.name,area:d.area,h:d.h,fp:d.fp, lat:p.lat, lng:p.lng, ground:p.ground }); onCreate?.(d.tag); toast(`Asset ${d.tag} created.`); } else { await DB.update(AS_COL+"/"+a.tag,{ lat:p.lat, lng:p.lng, ground:p.ground }); toast(`Asset ${a.tag} moved.`); } } }; map.classList.add("placing"); setMode("place","Place asset",`Click the model where <b>${P(draft.tag||"the asset")}</b> stands.`,true); };
+  el.querySelector("#a-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } const draft={ ...read(), pos }; closePop(); setTab("map"); V.placing={ onPlace:async p=>{ if(isNew){ const d=draft; if(!d.tag||!d.name){ toast("Tag and name are required — reopen ＋ Asset.",true); return; } if(asset(d.tag)){ toast(`Asset ${d.tag} already exists.`,true); return; } await DB.set(AS_COL+"/"+d.tag,{ tag:d.tag,name:d.name,area:d.area,h:d.h,fp:d.fp, lat:p.lat, lng:p.lng, ground:p.ground }); onCreate?.(d.tag); toast(`Asset ${d.tag} created.`); } else { await DB.update(AS_COL+"/"+a.tag,{ lat:p.lat, lng:p.lng, ground:p.ground }); toast(`Asset ${a.tag} moved.`); } } }; orbitSync(); map.classList.add("placing"); setMode("place","Place asset",`Click the model where <b>${P(draft.tag||"the asset")}</b> stands.`,true); };
   el.querySelector("#a-fly")?.addEventListener("click",()=>{ setTab("map"); flyAsset(a); });
   el.querySelector("#a-del")?.addEventListener("click",async()=>{ if(refs){ toast(`${a.tag} is referenced by ${refs} work order${refs===1?"":"s"}; remove those references first.`,true); return; } if(!confirm(`Delete asset ${a.tag}?`)) return; await DB.del(AS_COL+"/"+a.tag); closePop(); });
 }
 
-/* ---------- Work order view: register hides, record docks right, camera pivots around the location only ---------- */
-let LOCK=null, flying=false;
-function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); if(map){ flyWO(w); } woMode(); }
-function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); if(map) fly(siteCam(),1500); }
-function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",`<b>${w.id}</b> · rotate and zoom around it`,false); $("#site-view").hidden=false; }
-function lockTo(cam){ LOCK={ lat:cam.center.lat, lng:cam.center.lng, altitude:cam.center.altitude }; }
+/* ---------- Work order view: register hides, record docks right, camera pivots around the location only ----------
+   Google's gesture controller has no "fixed pivot" mode, so in this view a transparent layer over the map takes the
+   input itself: drag → heading/tilt, wheel/pinch → range, centre never changes. Lifted while placing or drawing points. */
+let LOCK=null, flying=false, flyT=null;
+function enterWOView(id){ const w=W(id); if(!w) return; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); if(map){ flyWO(w); } woMode(); orbitSync(); }
+function exitWOView(){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); if(map) fly(siteCam(),1500); }
+function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Work order",`<b>${w.id}</b> · drag to rotate · wheel or pinch to zoom · <em>Exit Work Order</em> is at the top of the panel`,false); }
+function orbitSync(){ const on=S.woView&&!!LOCK&&!V.draw&&!V.placing; $("#orbit").hidden=!on; }
 function installLock(){
-  map.addEventListener("gmp-centerchange",()=>{ if(!LOCK||flying||V.draw||V.placing) return; const c=map.center; if(!c) return; if(Math.abs(c.lat-LOCK.lat)>1e-7||Math.abs(c.lng-LOCK.lng)>1e-7||Math.abs((c.altitude||0)-LOCK.altitude)>0.3) map.center=LOCK; });
+  const el=$("#orbit"); const ptrs=new Map(); let last=null, pinch0=null, range0=0;
+  const apply=(h,t,r)=>{ if(!map||!LOCK) return; map.center=LOCK; if(h!=null) map.heading=((h%360)+360)%360; if(t!=null) map.tilt=Math.max(0,Math.min(85,t)); if(r!=null) map.range=Math.max(15,Math.min(4000,r)); };
+  el.addEventListener("pointerdown",e=>{ if(flying) return; el.setPointerCapture(e.pointerId); ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY}); el.classList.add("drag"); last={x:e.clientX,y:e.clientY}; if(ptrs.size===2){ const [a,b]=[...ptrs.values()]; pinch0=Math.hypot(a.x-b.x,a.y-b.y); range0=map.range; } });
+  el.addEventListener("pointermove",e=>{ if(!ptrs.has(e.pointerId)||flying) return; ptrs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    if(ptrs.size>=2&&pinch0){ const [a,b]=[...ptrs.values()]; const d=Math.hypot(a.x-b.x,a.y-b.y); apply(null,null,range0*pinch0/Math.max(1,d)); return; }
+    if(!last) return; const dx=e.clientX-last.x, dy=e.clientY-last.y; last={x:e.clientX,y:e.clientY}; apply(map.heading+dx*0.35, map.tilt-dy*0.25, null); });
+  const up=e=>{ ptrs.delete(e.pointerId); if(ptrs.size<2) pinch0=null; if(!ptrs.size){ el.classList.remove("drag"); last=null; } };
+  el.addEventListener("pointerup",up); el.addEventListener("pointercancel",up);
+  el.addEventListener("wheel",e=>{ e.preventDefault(); if(flying) return; apply(null,null,map.range*Math.exp(e.deltaY*0.0012)); },{passive:false});
+  el.addEventListener("dblclick",()=>{ const w=W(S.open); if(w) flyWO(w); });
 }
 
 /* =====================================================================
@@ -1399,7 +1415,7 @@ async function openViewer(pid){
   const live=()=>{ const h=+el.querySelector("#vw-h").value, pt=+el.querySelector("#vw-p").value; el.querySelector("#vw-hv").textContent=fmtHeading(h); el.querySelector("#vw-pv").textContent=fmtPitch(pt); pending={ heading:h, pitch:pt }; previewPose(p,{ ...e, heading:h, pitch:pt }); };
   const commit=()=>{ if(!pending) return; savePoseCorrection(w.id,p,pending); pending=null; };
   el.querySelectorAll("#vw-h,#vw-p").forEach(r=>{ r.oninput=live; r.onchange=commit; });
-  el.querySelector("#vw-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } closeViewer(); setTab("map"); V.placing={ onPlace:pt=>{ savePoseCorrection(w.id,p,{ lat:pt.lat, lng:pt.lng, ground:pt.ground }); openViewer(pid); } }; map.classList.add("placing"); setMode("place","Move photo",`Click the model where this photo was taken.`,true); };
+  el.querySelector("#vw-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } closeViewer(); setTab("map"); V.placing={ onPlace:pt=>{ savePoseCorrection(w.id,p,{ lat:pt.lat, lng:pt.lng, ground:pt.ground }); openViewer(pid); } }; map.classList.add("placing"); orbitSync(); setMode("place","Move photo",`Click the model where this photo was taken.`,true); };
   el.querySelector("#vw-fly").onclick=()=>{ setTab("map"); flyPhoto(p); };
   el.querySelector("#vw-del").onclick=()=>deletePhoto(w.id,pid);
   if(hasPos(p)&&map&&S.tab==="map") flyPhoto(p);
