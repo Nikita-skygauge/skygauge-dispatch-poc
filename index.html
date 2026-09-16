@@ -162,6 +162,28 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 .act .t{font-family:var(--mono);font-size:11px;color:var(--ink-3);white-space:nowrap}
 .fileblock{border:1px dashed var(--line);border-radius:8px;padding:10px;font-size:12.5px;color:var(--ink-3);width:100%}
 
+/* photos */
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:6px}
+.th{position:relative;aspect-ratio:1;border-radius:8px;overflow:hidden;border:1px solid var(--line);cursor:pointer;background:var(--panel-2)}
+.th img{width:100%;height:100%;object-fit:cover;display:block}.th:hover{border-color:var(--accent)}.th.hl{outline:2px solid var(--sel)}
+.th .cmp{position:absolute;right:5px;bottom:4px;width:20px;height:20px;border-radius:50%;background:rgba(11,15,31,.75);color:#00FFE5;display:flex;align-items:center;justify-content:center;font-size:12px;transform-origin:center}
+.th .nopos{position:absolute;left:5px;bottom:4px;width:18px;height:18px;border-radius:50%;background:rgba(255,26,0,.85);color:#fff;font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center}
+#cam{position:fixed;inset:0;background:#000;z-index:200;display:flex;flex-direction:column}
+#cam video{flex:1;width:100%;object-fit:cover;min-height:0}
+.cam-hud{position:absolute;top:calc(12px + env(safe-area-inset-top,0px));left:12px;right:12px;display:flex;gap:8px;justify-content:space-between;font-family:var(--mono);font-size:13px;font-weight:600;color:#00FFE5;text-shadow:0 1px 3px #000}
+.cam-hud span{background:rgba(11,15,31,.6);padding:4px 8px;border-radius:6px}
+.cam-bar{display:flex;align-items:center;justify-content:space-between;padding:18px 24px calc(18px + env(safe-area-inset-bottom,0px));background:#0B0F1F}
+#cam-shoot{width:70px;height:70px;border-radius:50%;background:#fff;border:5px solid #00FFE5;cursor:pointer}
+#viewer{position:fixed;inset:0;z-index:150;background:#0B0F1F;display:grid;grid-template-rows:auto 1fr;grid-template-columns:1fr 320px;color:#E9EFFF}
+.vw-top{grid-column:1/-1;display:flex;align-items:center;gap:10px;padding:10px 14px;font-size:12px;color:#B9C2E0;border-bottom:1px solid #3A4270}
+.vw-img{display:flex;align-items:center;justify-content:center;min-height:0;padding:12px}.vw-img img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px}
+.vw-side{border-left:1px solid #3A4270;padding:14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+.vw-side .in{background:#141B33;border-color:#3A4270;color:#fff}
+.pose{display:flex;flex-direction:column;gap:8px;font-size:13px}.pose .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;color:#B9C2E0}.pose .kv .mono{color:#fff}
+.pose label{display:flex;align-items:center;gap:8px;font-size:12px;color:#B9C2E0}.pose input[type=range]{flex:1;accent-color:#00FFE5}
+.pose .hint{color:#7F89AE}
+@media (max-width:700px){ #viewer{grid-template-columns:1fr;grid-template-rows:auto 1fr auto} .vw-side{border-left:0;border-top:1px solid #3A4270;max-height:45vh} }
+
 /* popovers */
 .pop{position:fixed;z-index:60;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);min-width:240px;max-width:min(360px,96vw);max-height:min(440px,70vh);overflow:auto;padding:6px;font-size:13px}
 .pop .pin{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:7px 8px;font:inherit;font-size:13px;color:var(--ink);margin-bottom:4px}
@@ -364,7 +386,7 @@ function makeFirestore(F, db){
     async set(p,d,merge){ await F.setDoc(D(p),d,merge?{merge:true}:undefined); },
     async update(p,patch){ await F.updateDoc(D(p),patch); },
     async del(p){ // delete doc + known subcollections
-      for(const sub of ["activity","comments","blocks"]){ try{ const s=await F.getDocs(C(p+"/"+sub)); await Promise.all(s.docs.map(d=>F.deleteDoc(d.ref))); }catch{} }
+      for(const sub of ["activity","comments","blocks","photos","photofull"]){ try{ const s=await F.getDocs(C(p+"/"+sub)); await Promise.all(s.docs.map(d=>F.deleteDoc(d.ref))); }catch{} }
       await F.deleteDoc(D(p)); },
     async add(col,d){ const r=await F.addDoc(C(col),d); return r.id; },
     async list(col){ const s=await F.getDocs(C(col)); return s.docs.map(d=>({id:d.id,...d.data()})); },
@@ -595,7 +617,7 @@ function openPop(anchor, html, opts={}){
   return el;
 }
 document.addEventListener("pointerdown",e=>{ if(POP&&!POP.contains(e.target)) closePop(); },true);
-document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(POP){ closePop(); e.stopPropagation(); return; } if(V.draw){ $("#mode-exit").click(); return; } if(S.open) closePeek(); } });
+document.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(POP){ closePop(); e.stopPropagation(); return; } if($("#cam")){ closeCamera(); return; } if(VW){ closeViewer(); return; } if(V.draw){ $("#mode-exit").click(); return; } if(S.open) closePeek(); } });
 
 /* =====================================================================
    VALUE RENDERERS (record page, table cell, board card)
@@ -616,7 +638,7 @@ function renderValue(p,v,w,compact){
     case "url": return `<a href="${P(v)}" target="_blank" rel="noopener" class="link" style="overflow:hidden;text-overflow:ellipsis;max-width:100%">${P(v.replace(/^https?:\/\//,""))}</a>`;
     case "email": return `<a href="mailto:${P(v)}" class="link">${P(v)}</a>`;
     case "phone": return `<a href="tel:${P(v)}" class="link">${P(v)}</a>`;
-    case "files": return `<span class="hint">${v.length} file${v.length===1?"":"s"}</span>`;
+    case "files": return `<span class="hint">${p.imagesOnly?"📷 ":""}${v.length} ${p.imagesOnly?"photo":"file"}${v.length===1?"":"s"}</span>`;
     case "relation": return v.map(t=>`<span class="pill mono" data-asset="${P(t)}" title="${P(asset(t)?.name||"")}" style="background:var(--steel-2);color:var(--ink);cursor:pointer">${P(t)}</span>`).join("");
   }
   return P(describe(p,v));
@@ -646,7 +668,8 @@ function startEdit(p,w,anchor){
     case "date": datePicker(p,w,anchor); return;
     case "person": personPicker(p,w,anchor); return;
     case "relation": assetPicker(p,w,anchor); return;
-    case "files": openPop(anchor,`<div class="fr" style="flex-direction:column;align-items:flex-start;gap:6px"><b>File uploads are not enabled yet</b><span class="hint">Photos and documents need Firebase Storage, which requires the project to be on the Blaze plan. Once billing is enabled, this property uploads directly from desktop or a phone camera.</span></div>`,{width:300}); return;
+    case "files": if(p.imagesOnly){ if(S.open!==w.id) openWO(w.id); const el=openPop(anchor,`<div class="mi" data-a="take">📷 Take photo</div><div class="mi" data-a="pick">Choose from library</div>`,{width:220,noFocus:true}); el.onclick=e=>{ const a=e.target.closest("[data-a]")?.dataset.a; if(!a) return; closePop(); if(a==="take") openCamera(w.id); else { const i=$("#ph-file"); if(i) i.click(); } }; return; }
+      openPop(anchor,`<div class="fr" style="flex-direction:column;align-items:flex-start;gap:6px"><b>Document uploads are not enabled yet</b><span class="hint">PDFs and reports need Firebase Storage (Blaze plan). Photos work now via the Photos property.</span></div>`,{width:300}); return;
   }
 }
 
@@ -843,10 +866,10 @@ let actUnsub=null, ACT=[], showEmpty=false, showAct=false;
 function openWO(id,fly){
   const w=W(id); if(!w) return;
   if(S.open!==id){ showEmpty=false; showAct=false; actUnsub?.(); ACT=[]; actUnsub=DB.watchCol(WO_COL+"/"+id+"/activity",rows=>{ ACT=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id) renderActivity(); }); }
-  S.open=id; $("#peek").classList.add("on"); renderRecord(); highlightCard(id);
+  S.open=id; watchPhotos(id); $("#peek").classList.add("on"); renderRecord(); highlightCard(id);
   if(fly&&map) flyWO(w);
 }
-function closePeek(){ S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
+function closePeek(){ closeViewer(); stopPhotos(); S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
 function highlightCard(id){ $$(".kcard.hl").forEach(c=>c.classList.remove("hl")); if(id){ const c=document.querySelector(`.kcard[data-id="${id}"]`); if(c){ c.classList.add("hl"); c.scrollIntoView({block:"nearest"}); } } }
 function renderRecord(){
   const w=W(S.open); if(!w){ closePeek(); return; }
@@ -869,11 +892,12 @@ function renderRecord(){
       <div class="acts"><button class="btn sm" id="l-pin">${loc.pin?"Move pin":"Place pin"}</button><button class="btn sm" id="l-area">${loc.area?.length?"Redraw area":"Draw area"}</button>${loc.area?.length?`<button class="btn sm" id="l-noarea">Remove area</button>`:""}<button class="btn sm teal" id="l-fly" ${loc.pin||loc.area?"":"disabled"}>Fly to</button>
       <label class="hint" style="display:flex;align-items:center;gap:4px;margin-left:auto">Alt <input class="in mono" id="l-alt" type="number" value="${Math.round(loc.pin?.alt||0)}" style="width:64px;padding:2px 6px"> m</label></div>
     </div></section>
-    <section class="ps"><h3>Photos & documents</h3><div class="fileblock">Uploads are not enabled yet — Firebase Storage needs the project on the Blaze plan. Once it is on, this section becomes the photo gallery with camera capture on mobile.</div></section>
+    ${galleryHTML()}
+    <section class="ps"><h3 style="cursor:default">Documents</h3><div class="fileblock">Document uploads (PDFs, reports) wait on Firebase Storage — a billing decision. Photos work now.</div></section>
     <section class="ps"><h3>Comments</h3><div class="hint">Comments arrive in the next build.</div></section>
     <section class="ps"><h3 id="act-h">${showAct?"▾":"▸"} Activity <span class="mono" style="font-weight:400" id="act-n">${ACT.length}</span></h3><div id="act" ${showAct?"":"hidden"}></div></section>
     <div class="hint" style="margin-top:22px">Created ${P(fmtDate(w.created,true))} by ${P(w.createdBy?.name||"")} · last edited ${P(rel(w.edited))} by ${P(w.editedBy?.name||"")}${w.completedAt?` · completed ${P(fmtDate(w.completedAt,true))}`:""}</div>`;
-  renderActivity();
+  renderActivity(); wireGallery();
   const t=$("#ptitle"); const fit=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; fit(); t.oninput=fit;
   t.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); t.blur(); } if(e.key==="Escape"){ t.value=w.title||""; fit(); t.blur(); e.stopPropagation(); } };
   t.onblur=()=>setTitle(w.id,t.value.trim());
@@ -922,6 +946,7 @@ function renderViews(){
 function cardHTML(w){
   const vis=props().filter(p=>(S.schema.cardProps||[]).includes(p.id)&&!S.hidden.board.has(p.id));
   const bits=vis.map(p=>{ const v=w.values?.[p.id]; return isEmpty(v)&&!p.system?"":renderValue(p,v,w,true); }).filter(Boolean);
+  const nph=(w.values?.photos||[]).length; if(nph&&!(S.schema.cardProps||[]).includes("photos")) bits.push(`<span class="hint">📷 ${nph}</span>`);
   return `<div class="kcard ${S.open===w.id?"hl":""}" draggable="true" data-id="${w.id}"><div class="t">${P(w.title||"Untitled")}</div><div class="m"><span class="id">${w.id}</span>${bits.join("")}</div></div>`;
 }
 function renderBoard(rows){
@@ -1064,7 +1089,7 @@ async function initMap(){
   map.addEventListener("gmp-click",onMapClick);
   $("#canvas-wrap").prepend(map); $("#loading").hidden=true;
   $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`;
-  requestAnimationFrame(()=>{ drawSite(); syncAssetOverlays(); syncOverlays(); });
+  requestAnimationFrame(()=>{ drawSite(); syncAssetOverlays(); syncOverlays(); syncPhotoOverlays(); });
 }
 function applyCameraLimits(){ if(!map) return; const L=cameraLimits(); map.bounds=L.bounds; map.maxAltitude=L.maxAltitude; const c=siteCam(); map.center=c.center; map.range=c.range; map.tilt=c.tilt; map.heading=c.heading; const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
 function drawSite(){ if(!map) return; OV.site?.remove(); const B=BOUNDARY(); const line=new lib.Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true }); line.path=[...B,B[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(line); OV.site=line; }
@@ -1155,6 +1180,211 @@ function assetEditor(a,anchor,opts={}){
   el.querySelector("#a-fly")?.addEventListener("click",()=>{ setTab("map"); flyAsset(a); });
   el.querySelector("#a-del")?.addEventListener("click",async()=>{ if(refs){ toast(`${a.tag} is referenced by ${refs} work order${refs===1?"":"s"}; remove those references first.`,true); return; } if(!confirm(`Delete asset ${a.tag}?`)) return; await DB.del(AS_COL+"/"+a.tag); closePop(); });
 }
+
+/* =====================================================================
+   PHOTOS + POSE (§5a/§5b) — stored in Firestore until Storage is enabled (R40)
+   workorders/{id}/photos/{pid}     { t, by, w, h, bytes, thumb(dataURL 320px), caption, pose:{raw,corrected,source} }
+   workorders/{id}/photofull/{pid}  { data(dataURL ≤600KB) }
+   ===================================================================== */
+const EYE_H=1.6, WEDGE_LEN=12, WEDGE_HALF=30;
+let PH=[], phUnsub=null, phWO=null;               // photos of the open record
+const PHOV={};                                     // photo overlays on the model: pid → {m, wedge}
+const fullCache=new Map();
+
+function watchPhotos(id){
+  if(phWO===id) return; phUnsub?.(); PH=[]; phWO=id; clearPhotoOverlays();
+  phUnsub=DB.watchCol(WO_COL+"/"+id+"/photos",rows=>{ PH=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id){ renderGallery(); syncPhotoOverlays(); } });
+}
+function stopPhotos(){ phUnsub?.(); phUnsub=null; PH=[]; phWO=null; clearPhotoOverlays(); }
+const effPose = p => p.pose?.corrected ? { ...p.pose.raw, ...p.pose.corrected } : (p.pose?.raw||null);
+const hasPos = p => { const e=effPose(p); return e && isFinite(e.lat) && isFinite(e.lng); };
+
+/* ---------- image processing ---------- */
+async function loadBitmap(file){ try{ return await createImageBitmap(file,{ imageOrientation:"from-image" }); }catch{ return new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=URL.createObjectURL(file); }); } }
+function drawScaled(img,maxEdge){ const w=img.width||img.naturalWidth, h=img.height||img.naturalHeight; const s=Math.min(1,maxEdge/Math.max(w,h)); const c=document.createElement("canvas"); c.width=Math.round(w*s); c.height=Math.round(h*s); c.getContext("2d").drawImage(img,0,0,c.width,c.height); return c; }
+function encodeUnder(canvas,maxBytes){ let q=0.82, d; do{ d=canvas.toDataURL("image/jpeg",q); q-=0.08; }while(d.length*0.75>maxBytes && q>0.3); return d; }
+async function processImage(file){
+  const img=await loadBitmap(file);
+  const full=drawScaled(img,1600), th=drawScaled(img,320);
+  const data=encodeUnder(full,600*1024), thumb=th.toDataURL("image/jpeg",0.7);
+  img.close?.();
+  return { data, thumb, w:full.width, h:full.height, bytes:Math.round(data.length*0.75) };
+}
+/* ---------- minimal EXIF GPS reader (V77) ---------- */
+async function exifPose(file){
+  try{
+    const buf=new DataView(await file.slice(0,256*1024).arrayBuffer());
+    if(buf.getUint16(0)!==0xFFD8) return null;
+    let off=2; while(off<buf.byteLength-4){ if(buf.getUint8(off)!==0xFF) break; const marker=buf.getUint8(off+1), len=buf.getUint16(off+2); if(marker===0xE1 && buf.getUint32(off+4)===0x45786966){ return parseTiff(buf,off+10); } off+=2+len; }
+  }catch{} return null;
+  function parseTiff(v,base){
+    const le=v.getUint16(base)===0x4949; const u16=o=>v.getUint16(o,le), u32=o=>v.getUint32(o,le);
+    const rat=o=>u32(o)/u32(o+4);
+    const readIFD=(o,tags)=>{ const n=u16(o); const out={}; for(let i=0;i<n;i++){ const e=o+2+i*12, tag=u16(e), type=u16(e+2), cnt=u32(e+4); const valOff=cnt*({1:1,2:1,3:2,4:4,5:8,10:8}[type]||1)>4?base+u32(e+8):e+8; if(tags.includes(tag)) out[tag]={type,cnt,off:valOff}; } return out; };
+    const ifd0=readIFD(base+u32(base+4),[0x8825]); if(!ifd0[0x8825]) return null;
+    const gps=readIFD(base+u32(ifd0[0x8825].off),[1,2,3,4,6,17,16]);
+    const dms=e=>{ if(!e) return NaN; return rat(e.off)+rat(e.off+8)/60+rat(e.off+16)/3600; };
+    const ref=e=>e?String.fromCharCode(v.getUint8(e.off)):"";
+    let lat=dms(gps[2]), lng=dms(gps[4]); if(ref(gps[1])==="S") lat=-lat; if(ref(gps[3])==="W") lng=-lng;
+    if(!isFinite(lat)||!isFinite(lng)) return null;
+    const alt=gps[6]?rat(gps[6].off):null; const heading=gps[17]?rat(gps[17].off):null;
+    return { lat, lng, alt, acc:null, heading:isFinite(heading)?heading:null, pitch:null, roll:null };
+  }
+}
+/* ---------- sensors (V76) ---------- */
+const SENS={ pos:null, ori:null, watch:null, on:false };
+function headingFrom(e){ if(typeof e.webkitCompassHeading==="number") return e.webkitCompassHeading; if(e.absolute&&e.alpha!=null) return (360-e.alpha)%360; return e.alpha!=null?(360-e.alpha)%360:null; }
+async function startSensors(){
+  if(SENS.on) return; SENS.on=true;
+  if(navigator.geolocation){ SENS.watch=navigator.geolocation.watchPosition(p=>{ SENS.pos={ lat:p.coords.latitude, lng:p.coords.longitude, alt:p.coords.altitude, acc:p.coords.accuracy }; updateCamHUD(); },()=>{},{ enableHighAccuracy:true, maximumAge:2000, timeout:15000 }); }
+  try{ if(typeof DeviceOrientationEvent!=="undefined" && DeviceOrientationEvent.requestPermission){ await DeviceOrientationEvent.requestPermission(); } }catch{}
+  const h=e=>{ const hd=headingFrom(e); if(hd==null && e.beta==null) return; const ang=(screen.orientation?.angle||0);
+    // portrait, phone held upright, camera facing away: pitch = beta-90; heading offset by screen rotation
+    SENS.ori={ heading:hd==null?null:((hd+ang)%360+360)%360, pitch:e.beta==null?null:Math.max(-90,Math.min(90,e.beta-90)), roll:e.gamma??null }; updateCamHUD(); };
+  window.addEventListener("deviceorientationabsolute",h,true); window.addEventListener("deviceorientation",h,true); SENS.stop=()=>{ window.removeEventListener("deviceorientationabsolute",h,true); window.removeEventListener("deviceorientation",h,true); };
+}
+function stopSensors(){ if(SENS.watch!=null) navigator.geolocation?.clearWatch(SENS.watch); SENS.stop?.(); SENS.on=false; SENS.watch=null; }
+function currentPose(){ if(!SENS.pos&&!SENS.ori) return null; return { lat:SENS.pos?.lat??null, lng:SENS.pos?.lng??null, alt:SENS.pos?.alt??null, acc:SENS.pos?.acc??null, heading:SENS.ori?.heading??null, pitch:SENS.ori?.pitch??null, roll:SENS.ori?.roll??null }; }
+const fmtHeading = h => h==null?"—":String(Math.round(h)).padStart(3,"0")+"°";
+const fmtPitch = p => p==null?"—":(p>=0?"+":"")+Math.round(p)+"°";
+
+/* ---------- in-app camera (V75) ---------- */
+let camStream=null;
+async function openCamera(woId){
+  if(!navigator.mediaDevices?.getUserMedia){ toast("This browser has no camera access — use Choose from library.",true); return; }
+  const el=document.createElement("div"); el.id="cam"; el.innerHTML=`<video autoplay playsinline muted></video>
+    <div class="cam-hud"><span id="cam-h">HDG —</span><span id="cam-p">PITCH —</span><span id="cam-a">GPS —</span></div>
+    <div class="cam-bar"><button class="btn" id="cam-x">Cancel</button><button id="cam-shoot" aria-label="Take photo"></button><span style="width:70px"></span></div>`;
+  document.body.append(el);
+  startSensors();
+  try{ camStream=await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:"environment" }, width:{ ideal:2560 }, height:{ ideal:1920 } }, audio:false }); el.querySelector("video").srcObject=camStream; }
+  catch(e){ toast("Camera not available: "+(e.message||e),true); closeCamera(); return; }
+  el.querySelector("#cam-x").onclick=closeCamera;
+  el.querySelector("#cam-shoot").onclick=async()=>{
+    const v=el.querySelector("video"); const c=document.createElement("canvas"); c.width=v.videoWidth; c.height=v.videoHeight; c.getContext("2d").drawImage(v,0,0);
+    const pose=currentPose(); const blob=await new Promise(r=>c.toBlob(r,"image/jpeg",0.95));
+    closeCamera();
+    await addPhoto(woId, blob, pose?{ raw:pose, corrected:null, source:"sensor" }:{ raw:null, corrected:null, source:"none" });
+  };
+}
+function updateCamHUD(){ const h=$("#cam-h"), p=$("#cam-p"), a=$("#cam-a"); if(!h) return; h.textContent="HDG "+fmtHeading(SENS.ori?.heading); p.textContent="PITCH "+fmtPitch(SENS.ori?.pitch); a.textContent=SENS.pos?`GPS ±${Math.round(SENS.pos.acc||0)} m`:"GPS …"; }
+function closeCamera(){ camStream?.getTracks().forEach(t=>t.stop()); camStream=null; $("#cam")?.remove(); stopSensors(); }
+
+/* ---------- add / delete ---------- */
+async function addPhoto(woId, fileOrBlob, pose){
+  const w=W(woId); if(!w) return;
+  if(!/^image\//.test(fileOrBlob.type||"image/jpeg")){ toast("Photos accepts images only.",true); return; }
+  if(fileOrBlob.size>25*1024*1024){ toast("Photos larger than 25 MB are not accepted.",true); return; }
+  toast("Processing photo…");
+  let img; try{ img=await processImage(fileOrBlob); }catch(e){ toast("Could not read that image.",true); return; }
+  if(!pose){ const ex=await exifPose(fileOrBlob); pose=ex?{ raw:ex, corrected:null, source:"exif" }:{ raw:null, corrected:null, source:"none" }; }
+  const pid=uid();
+  const meta={ t:now(), by:userRef(), w:img.w, h:img.h, bytes:img.bytes, thumb:img.thumb, caption:"", pose, name:fileOrBlob.name||"photo.jpg" };
+  try{ await DB.set(WO_COL+"/"+woId+"/photofull/"+pid,{ data:img.data }); await DB.set(WO_COL+"/"+woId+"/photos/"+pid,meta); }
+  catch(e){ toast("Upload failed: "+(e.message||e),true); return; }
+  log(woId,`added a photo${pose.source==="sensor"?" with position and heading":pose.source==="exif"?" with EXIF position":""}`);
+  const n=(w.values?.photos||[]); if(prop("photos")) setValue(woId,"photos",[...n,{ id:pid, name:meta.name, bytes:meta.bytes }]);
+  toast("Photo added"+(pose.source==="none"?" — position unknown":""));
+}
+async function deletePhoto(woId,pid){
+  if(!confirm("Delete this photo?")) return;
+  await DB.del(WO_COL+"/"+woId+"/photos/"+pid); await DB.del(WO_COL+"/"+woId+"/photofull/"+pid).catch(()=>{});
+  const w=W(woId); if(w&&prop("photos")) setValue(woId,"photos",(w.values?.photos||[]).filter(f=>f.id!==pid)); log(woId,"deleted a photo"); closeViewer();
+}
+async function getFull(woId,pid){ if(fullCache.has(pid)) return fullCache.get(pid); const d=await DB.get(WO_COL+"/"+woId+"/photofull/"+pid); const u=d?.data||null; if(u) fullCache.set(pid,u); return u; }
+
+/* ---------- gallery in the record page (V46, V81) ---------- */
+function galleryHTML(){
+  return `<section class="ps" id="gal"><h3 style="cursor:default">Photos <span class="mono" style="font-weight:400">${PH.length}</span>
+    <span style="margin-left:auto;display:flex;gap:6px"><button class="btn sm" id="ph-take">📷 Take photo</button><button class="btn sm" id="ph-pick">Choose from library</button></span></h3>
+    <input type="file" id="ph-file" accept="image/*" multiple hidden>
+    ${PH.length?`<div class="thumbs">${PH.map(p=>{ const e=effPose(p); return `<div class="th" data-pid="${p.id}" title="${P(p.caption||"")}"><img src="${p.thumb}" alt="">${e?.heading!=null?`<span class="cmp" style="transform:rotate(${Math.round(e.heading)}deg)" title="Heading ${fmtHeading(e.heading)}">➤</span>`:""}${!hasPos(p)?`<span class="nopos" title="Position unknown">?</span>`:""}</div>`; }).join("")}</div>`
+    :`<div class="hint">No photos yet. Take one on your phone: the position and the direction you were facing are recorded and drawn on the model.</div>`}
+    <div class="hint" style="margin-top:6px">Positions are approximate — GPS 3–30 m, compass ±15° or worse near heavy steel. Open a photo to move its icon or correct the heading.</div></section>`;
+}
+function renderGallery(){ const g=$("#gal"); if(!g) return; g.outerHTML=galleryHTML(); wireGallery(); }
+function wireGallery(){
+  const w=W(S.open); if(!w) return;
+  $("#ph-take")?.addEventListener("click",()=>openCamera(w.id));
+  $("#ph-pick")?.addEventListener("click",()=>$("#ph-file").click());
+  $("#ph-file")?.addEventListener("change",async e=>{ for(const f of e.target.files) await addPhoto(w.id,f,null); e.target.value=""; });
+  $$("#gal .th").forEach(t=>t.onclick=()=>openViewer(t.dataset.pid));
+}
+
+/* ---------- viewer with pose correction (V79, V80) ---------- */
+let VW=null;
+async function openViewer(pid){
+  const w=W(S.open); const p=PH.find(x=>x.id===pid); if(!w||!p) return;
+  closeViewer(); highlightPhoto(pid);
+  const el=document.createElement("div"); el.id="viewer"; VW=el;
+  const e=effPose(p)||{}; const corrected=!!p.pose?.corrected;
+  el.innerHTML=`<div class="vw-top"><span class="mono">${P(w.id)} · ${P(fmtDate(p.t,true))} · ${P(p.by?.name||"")}</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn sm" id="vw-prev">‹</button><button class="btn sm" id="vw-next">›</button><button class="btn sm" id="vw-x">✕</button></span></div>
+    <div class="vw-img"><img src="${p.thumb}" id="vw-full" alt=""></div>
+    <div class="vw-side">
+      <input class="in" id="vw-cap" placeholder="Add a caption…" value="${P(p.caption||"")}">
+      <div class="pose">
+        <div class="eyebrow">Pose · ${corrected?`corrected by ${P(p.pose.corrected.by||"")}`:p.pose?.source==="none"?"position unknown":`approximate${e.acc?` ±${Math.round(e.acc)} m`:""} · ${P(p.pose?.source||"")}`}</div>
+        <div class="kv"><span>Position</span><span class="mono">${isFinite(e.lat)?`${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}`:"—"}</span>
+        <span>GPS altitude</span><span class="mono">${e.alt!=null?Math.round(e.alt)+" m (not used)":"—"}</span>
+        <span>Heading</span><span class="mono" id="vw-hv">${fmtHeading(e.heading)}</span>
+        <span>Pitch</span><span class="mono" id="vw-pv">${fmtPitch(e.pitch)}</span></div>
+        <label>Heading <input type="range" id="vw-h" min="0" max="359" value="${Math.round(e.heading??0)}"></label>
+        <label>Pitch <input type="range" id="vw-p" min="-60" max="80" value="${Math.round(e.pitch??0)}"></label>
+        <div class="acts"><button class="btn sm teal" id="vw-move">Move on model</button><button class="btn sm" id="vw-fly" ${hasPos(p)?"":"disabled"}>Fly to</button><button class="btn sm danger" id="vw-del" style="margin-left:auto">Delete</button></div>
+        <div class="hint">Sensor pose is advisory: GPS 3–30 m (worse between tall steel), compass ±15° and unreliable near large steel or electrical plant, pitch ±2°.</div>
+      </div>
+    </div>`;
+  document.body.append(el);
+  getFull(w.id,pid).then(u=>{ if(u&&VW===el) el.querySelector("#vw-full").src=u; });
+  const idx=PH.indexOf(p);
+  el.querySelector("#vw-x").onclick=closeViewer;
+  el.querySelector("#vw-prev").onclick=()=>{ const n=PH[(idx-1+PH.length)%PH.length]; if(n) openViewer(n.id); };
+  el.querySelector("#vw-next").onclick=()=>{ const n=PH[(idx+1)%PH.length]; if(n) openViewer(n.id); };
+  el.addEventListener("keydown",ev=>{ if(ev.key==="ArrowLeft") el.querySelector("#vw-prev").click(); if(ev.key==="ArrowRight") el.querySelector("#vw-next").click(); });
+  const cap=el.querySelector("#vw-cap"); cap.onblur=()=>{ if(cap.value.trim()!==(p.caption||"")) DB.update(WO_COL+"/"+w.id+"/photos/"+pid,{ caption:cap.value.trim() }); }; cap.onkeydown=ev=>{ if(ev.key==="Enter") cap.blur(); };
+  let pending=null;
+  const live=()=>{ const h=+el.querySelector("#vw-h").value, pt=+el.querySelector("#vw-p").value; el.querySelector("#vw-hv").textContent=fmtHeading(h); el.querySelector("#vw-pv").textContent=fmtPitch(pt); pending={ heading:h, pitch:pt }; previewPose(p,{ ...e, heading:h, pitch:pt }); };
+  const commit=()=>{ if(!pending) return; savePoseCorrection(w.id,p,pending); pending=null; };
+  el.querySelectorAll("#vw-h,#vw-p").forEach(r=>{ r.oninput=live; r.onchange=commit; });
+  el.querySelector("#vw-move").onclick=()=>{ if(!map){ toast("The map is not loaded.",true); return; } closeViewer(); setTab("map"); V.placing={ onPlace:pt=>{ savePoseCorrection(w.id,p,{ lat:pt.lat, lng:pt.lng, ground:pt.ground }); openViewer(pid); } }; map.classList.add("placing"); setMode("place","Move photo",`Click the model where this photo was taken.`,true); };
+  el.querySelector("#vw-fly").onclick=()=>{ setTab("map"); flyPhoto(p); };
+  el.querySelector("#vw-del").onclick=()=>deletePhoto(w.id,pid);
+  if(hasPos(p)&&map&&S.tab==="map") flyPhoto(p);
+}
+function closeViewer(){ VW?.remove(); VW=null; highlightPhoto(null); }
+async function savePoseCorrection(woId,p,patch){
+  const cur=p.pose?.corrected||{}; const corrected={ ...cur, ...patch, by:S.user.name, t:now() };
+  p.pose={ ...(p.pose||{ raw:null, source:"none" }), corrected }; syncPhotoOverlays();
+  await DB.update(WO_COL+"/"+woId+"/photos/"+p.id,{ "pose.corrected":corrected });
+  log(woId, patch.lat!=null?"moved a photo on the model":"corrected a photo's heading");
+}
+
+/* ---------- icons and wedges on the model (V78) ---------- */
+function camSvg(fill){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 24 24"); s.setAttribute("width","22"); s.setAttribute("height","22"); s.innerHTML=`<circle cx="12" cy="12" r="11" fill="${fill}" stroke="#0B0F1F" stroke-width="1.5"/><path d="M7 9h2.2l1-1.6h3.6L14.8 9H17a1 1 0 011 1v6a1 1 0 01-1 1H7a1 1 0 01-1-1v-6a1 1 0 011-1z" fill="#0B0F1F"/><circle cx="12" cy="13" r="2.2" fill="${fill}"/>`; return s; }
+function wedgePath(e,ground){
+  const base=ground+EYE_H; const h=(e.heading??0)*Math.PI/180, half=WEDGE_HALF*Math.PI/180, pitch=(e.pitch??0)*Math.PI/180;
+  const dz=Math.sin(pitch)*WEDGE_LEN, dl=Math.cos(pitch)*WEDGE_LEN;
+  const pt=a=>({ ...offset(e.lat,e.lng,Math.sin(a)*dl,Math.cos(a)*dl), altitude:base+dz });
+  return [ { lat:e.lat, lng:e.lng, altitude:base }, pt(h-half), pt(h+half), { lat:e.lat, lng:e.lng, altitude:base } ];
+}
+function photoGround(p){ const e=effPose(p); const w=W(S.open); return e?.ground ?? w?.location?.pin?.ground ?? w?.location?.areaGround ?? GROUND_FALLBACK; }
+function syncPhotoOverlays(){
+  if(!map||!lib) return;
+  const want=new Set(PH.filter(hasPos).map(p=>p.id));
+  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].wedge?.remove(); delete PHOV[id]; } });
+  PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e); const o=PHOV[p.id]; if(o&&o.sig===sig) return; o?.m.remove(); o?.wedge?.remove();
+    const fill=o?.hl?"#FFFFFF":"#00FFE5";
+    const m=new lib.Marker3DInteractiveElement({ position:{ lat:e.lat, lng:e.lng, altitude:EYE_H }, altitudeMode:"RELATIVE_TO_GROUND", sizePreserved:true, drawsWhenOccluded:true }); m.append(tpl(camSvg(fill)));
+    m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); openViewer(p.id); }); map.append(m);
+    let wedge=null; if(e.heading!=null){ wedge=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", fillColor:"rgba(0,255,229,0.28)", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:2, drawsOccludedSegments:true }); wedge.path=wedgePath(e,0); map.append(wedge); }
+    PHOV[p.id]={ m, wedge, sig, hl:o?.hl||false }; });
+}
+function tpl(svg){ const t=document.createElement("template"); t.content.append(svg); return t; }
+function previewPose(p,e){ const o=PHOV[p.id]; if(!o||!map) return; if(!o.wedge){ o.wedge=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", fillColor:"rgba(0,255,229,0.28)", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:2, drawsOccludedSegments:true }); map.append(o.wedge); } o.wedge.path=wedgePath(e,0); }
+function clearPhotoOverlays(){ Object.values(PHOV).forEach(o=>{ o.m.remove(); o.wedge?.remove(); }); for(const k in PHOV) delete PHOV[k]; }
+function highlightPhoto(pid){ Object.entries(PHOV).forEach(([id,o])=>{ const hl=id===pid; if(hl!==o.hl){ o.hl=hl; o.sig=""; } }); $$("#gal .th").forEach(t=>t.classList.toggle("hl",t.dataset.pid===pid)); syncPhotoOverlays(); }
+function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGround(p); const h=e.heading??0; const back=offset(e.lat,e.lng,-Math.sin(h*Math.PI/180)*6,-Math.cos(h*Math.PI/180)*6);
+  map.flyCameraTo({ endCamera:{ center:{ lat:back.lat, lng:back.lng, altitude:g+EYE_H+4 }, range:45, tilt:72, heading:h }, durationMillis:1600 }); }
 
 boot();
 </script>
