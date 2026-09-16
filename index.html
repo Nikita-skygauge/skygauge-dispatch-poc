@@ -240,7 +240,6 @@ pre.json{background:var(--panel-2);border:1px solid var(--line);border-radius:8p
       <button class="btn" data-view="north">From harbour</button>
       <button class="btn" data-view="plan">Plan</button>
       <button class="btn" id="b-orbit" title="Slow orbit of the whole works">Orbit</button>
-      <button class="btn on" id="b-mask" title="Dim everything outside the site boundary">Mask</button>
     </div>
     <div id="legend"></div>
     <div id="stats"></div>
@@ -275,26 +274,24 @@ pre.json{background:var(--panel-2);border:1px solid var(--line);border-radius:8p
    The camera limits, the mask and the recommended zoom-out all derive from it.
    ===================================================================== */
 const DEFAULT_BOUNDARY = [
-  { lat:43.28165, lng:-79.80517 }, { lat:43.28241, lng:-79.80094 }, { lat:43.28089, lng:-79.79644 }, { lat:43.27596, lng:-79.79565 },
-  { lat:43.27140, lng:-79.79723 }, { lat:43.26609, lng:-79.79776 }, { lat:43.26154, lng:-79.79935 }, { lat:43.25774, lng:-79.80094 },
-  { lat:43.25736, lng:-79.80834 }, { lat:43.26267, lng:-79.81046 }, { lat:43.26837, lng:-79.81152 }, { lat:43.27406, lng:-79.81099 },
-  { lat:43.27899, lng:-79.80834 },
+  { lat:43.28600, lng:-79.80800 }, { lat:43.28600, lng:-79.80100 },
+  { lat:43.25650, lng:-79.80100 }, { lat:43.25650, lng:-79.80800 },
 ];
 function inPoly(p, poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat)) && (p.lng < (b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
 const AREAS = ["Ironmaking","Steelmaking","Rolling & Finishing","Utilities","Projects"];
 /* asset register — approximate placements; lat/lng: marker · h: height (m) · fp: footprint (m) */
 const ASSETS = [
-  { id:"BF-4",   name:"No. 4 Blast Furnace — stove stack",         area:"Ironmaking", lat:43.2728, lng:-79.8078, h:82, fp:12, service:"Hot blast stoves, 1,200 °C", surface:"Insulated steel shell" },
-  { id:"BF-2",   name:"No. 2 Blast Furnace — uptakes & downcomer",  area:"Ironmaking", lat:43.2722, lng:-79.8098, h:70, fp:22, service:"BF top gas, refractory lined", surface:"Bare steel, refractory" },
-  { id:"GH-1",   name:"BF gas holder",                             area:"Ironmaking", lat:43.2762, lng:-79.8030, h:48, fp:36, service:"Blast furnace gas storage", surface:"Painted steel" },
-  { id:"KOBM",   name:"KOBM baghouse stack",                       area:"Steelmaking", lat:43.2690, lng:-79.8072, h:74, fp:10, service:"Secondary emissions, BOF shop", surface:"Bare steel" },
-  { id:"DS-1",   name:"Desulphurization baghouse stack",           area:"Steelmaking", lat:43.2700, lng:-79.8090, h:55, fp:8,  service:"Hot metal desulph. fume", surface:"Bare steel" },
-  { id:"HSM",    name:"Hot Strip Mill — roof & monitor vents",     area:"Rolling & Finishing", lat:43.2655, lng:-79.8085, h:28, fp:90, service:"Mill building envelope", surface:"Cladding, galvanized" },
-  { id:"GL-4",   name:"No. 4 Galvanizing line — furnace stack",    area:"Rolling & Finishing", lat:43.2625, lng:-79.8090, h:38, fp:6, service:"Annealing furnace flue", surface:"Insulated steel" },
-  { id:"BH-1",   name:"Boiler house stack — Utilities",            area:"Utilities", lat:43.2675, lng:-79.8110, h:65, fp:9,  service:"Boiler flue gas", surface:"Bare steel, external ladder" },
-  { id:"T-102",  name:"Fuel oil tank T-102",                       area:"Utilities", lat:43.2600, lng:-79.8062, h:16, fp:40, service:"No. 6 fuel oil", surface:"Painted steel, cone roof" },
-  { id:"WW-3",   name:"Wastewater clarifier No. 3",                area:"Utilities", lat:43.2770, lng:-79.8060, h:6,  fp:34, service:"Process water treatment", surface:"Concrete, steel bridge" },
-  { id:"DRI",    name:"DRI/EAF project — structural steel",        area:"Projects", lat:43.2640, lng:-79.8040, h:40, fp:60, service:"Under construction", surface:"Erected steel, unpainted" },
+  { id:"BF-4",   name:"No. 4 Blast Furnace — stove stack",         area:"Ironmaking", lat:43.2795, lng:-79.8048, h:82, fp:12, service:"Hot blast stoves, 1,200 °C", surface:"Insulated steel shell" },
+  { id:"BF-2",   name:"No. 2 Blast Furnace — uptakes & downcomer",  area:"Ironmaking", lat:43.2778, lng:-79.8042, h:70, fp:22, service:"BF top gas, refractory lined", surface:"Bare steel, refractory" },
+  { id:"GH-1",   name:"BF gas holder",                             area:"Ironmaking", lat:43.276, lng:-79.8036, h:48, fp:36, service:"Blast furnace gas storage", surface:"Painted steel" },
+  { id:"KOBM",   name:"KOBM baghouse stack",                       area:"Steelmaking", lat:43.2742, lng:-79.8048, h:74, fp:10, service:"Secondary emissions, BOF shop", surface:"Bare steel" },
+  { id:"DS-1",   name:"Desulphurization baghouse stack",           area:"Steelmaking", lat:43.2726, lng:-79.804, h:55, fp:8,  service:"Hot metal desulph. fume", surface:"Bare steel" },
+  { id:"HSM",    name:"Hot Strip Mill — roof & monitor vents",     area:"Rolling & Finishing", lat:43.2685, lng:-79.8045, h:28, fp:90, service:"Mill building envelope", surface:"Cladding, galvanized" },
+  { id:"GL-4",   name:"No. 4 Galvanizing line — furnace stack",    area:"Rolling & Finishing", lat:43.266, lng:-79.8038, h:38, fp:6, service:"Annealing furnace flue", surface:"Insulated steel" },
+  { id:"BH-1",   name:"Boiler house stack — Utilities",            area:"Utilities", lat:43.2708, lng:-79.8034, h:65, fp:9,  service:"Boiler flue gas", surface:"Bare steel, external ladder" },
+  { id:"T-102",  name:"Fuel oil tank T-102",                       area:"Utilities", lat:43.2638, lng:-79.8044, h:16, fp:40, service:"No. 6 fuel oil", surface:"Painted steel, cone roof" },
+  { id:"WW-3",   name:"Wastewater clarifier No. 3",                area:"Utilities", lat:43.2812, lng:-79.8038, h:6,  fp:34, service:"Process water treatment", surface:"Concrete, steel bridge" },
+  { id:"DRI",    name:"DRI/EAF project — structural steel",        area:"Projects", lat:43.261, lng:-79.8036, h:40, fp:60, service:"Under construction", surface:"Erected steel, unpainted" },
 ];
 const A = Object.fromEntries(ASSETS.map(a=>[a.id,a]));
 
@@ -362,17 +359,17 @@ function seed(){
     mk(3, { asset:"WW-3", type:"visual", task:"Weld / nozzle visual", title:"Launder & weir visual; UT on bridge members", priority:3, status:"completed", requiredBy:dplus(-10), plannedStart:dplus(-16), completed:dplus(-15), estHours:3, requestedBy:"D. Leung, Utilities" }),
     mk(27,{ asset:"DRI", type:"visual", task:"External visual", title:"Progress + QA visual on erected columns", priority:3, requiredBy:dplus(30), estHours:3, requestedBy:"A. Ferreira, Projects",
       scope:"Construction-phase progress visual: erected columns, crane rail welds. Coordinate with GC exclusion zones.",
-      area:[{lat:43.2634,lng:-79.8052},{lat:43.2648,lng:-79.8052},{lat:43.2648,lng:-79.8030},{lat:43.2634,lng:-79.8030}], areaHeight:40, position:{lat:43.2641,lng:-79.8041,alt:42} }),
+      area:[{lat:43.2604,lng:-79.8044},{lat:43.2616,lng:-79.8044},{lat:43.2616,lng:-79.8028},{lat:43.2604,lng:-79.8028}], areaHeight:40, position:{lat:43.2610,lng:-79.8036,alt:42} }),
     mk(29,{ asset:"GL-4", type:"insulation", task:"Insulation window", title:"Insulation window at flue elbow for UT", priority:2, requiredBy:dplus(-2), access:"scaffold", crew:"Contractor scaffold", estHours:12, condition:"isolation required",
       scope:"Open 600 × 600 window at the flue elbow, 18 m, for UT follow-up. Reclad after readings." }),
     mk(31,{ asset:"", type:"visual", task:"External visual", title:"Stockyard conveyor gallery — visual", priority:3, requiredBy:dplus(20), estHours:3, requestedBy:"P. Singh, Facilities",
       scope:"General-site order (no asset tag): conveyor gallery cladding and truss visual over the coal stockpiles.",
-      area:[{lat:43.2790,lng:-79.8038},{lat:43.2804,lng:-79.8036},{lat:43.2803,lng:-79.8004},{lat:43.2789,lng:-79.8006}], areaHeight:22, position:{lat:43.2797,lng:-79.8021,alt:24} }),
+      area:[{lat:43.2818,lng:-79.8046},{lat:43.2830,lng:-79.8046},{lat:43.2830,lng:-79.8030},{lat:43.2818,lng:-79.8030}], areaHeight:22, position:{lat:43.2824,lng:-79.8038,alt:24} }),
   ].map(withPos);
 }
 
 /* ---------- persistence (this browser) ---------- */
-const LS = { wo:"sgd4_wo", site:"sgd4_site", key:"sgd_gmaps_key" };
+const LS = { wo:"sgd5_wo", site:"sgd5_site", key:"sgd_gmaps_key" };
 let WOS = [], BOUNDARY = [];
 function load(){
   try{ const b=JSON.parse(localStorage.getItem(LS.site)||"null"); BOUNDARY = Array.isArray(b)&&b.length>=3 ? b : DEFAULT_BOUNDARY.slice(); }catch{ BOUNDARY = DEFAULT_BOUNDARY.slice(); }
@@ -422,7 +419,7 @@ const whereTxt = w => w.asset ? `<span class="mono">${P(w.asset)}</span>` : `<sp
 $("#asof").textContent = iso(TODAY);
 
 /* ---------- view state ---------- */
-const V = { tab:"view", sel:null, selWO:null, placing:null, draw:null, legendOff:new Set(), mask:true, filt:{type:"",prio:"",late:false,q:""} };
+const V = { tab:"view", sel:null, selWO:null, placing:null, draw:null, legendOff:new Set(), filt:{type:"",prio:"",late:false,q:""} };
 
 /* =====================================================================
    MAP
@@ -474,20 +471,14 @@ function applyCameraLimits(){
 
 /* --- site boundary: mask outside, outline on the ground --- */
 function drawSite(){
-  const { Polygon3DElement, Polyline3DElement } = lib;
-  OV.site.mask?.remove(); OV.site.line?.remove();
-  const g=siteGeom(), R=0.08;
-  const outer=[ {lat:g.c.lat-R,lng:g.c.lng-R},{lat:g.c.lat-R,lng:g.c.lng+R},{lat:g.c.lat+R,lng:g.c.lng+R},{lat:g.c.lat+R,lng:g.c.lng-R},{lat:g.c.lat-R,lng:g.c.lng-R} ].map(p=>({...p,altitude:0}));
-  const ring=[...BOUNDARY, BOUNDARY[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:0}));
-  const mask=new Polygon3DElement({ altitudeMode:"RELATIVE_TO_MESH", fillColor:"rgba(23,32,68,0.86)", strokeColor:"rgba(0,0,0,0)", strokeWidth:0, drawsOccludedSegments:false });
-  mask.path=outer; mask.innerPaths=[ring];
-  if(V.mask) map.append(mask);
-  const line=new Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:3, drawsOccludedSegments:true });
-  line.path=ring.map(p=>({...p,altitude:1}));
+  const { Polyline3DElement } = lib;
+  OV.site.line?.remove();
+  const ring=[...BOUNDARY, BOUNDARY[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2}));
+  const line=new Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true });
+  line.path=ring;
   map.append(line);
-  OV.site={ mask, line };
+  OV.site={ line };
 }
-$("#b-mask").onclick=()=>{ V.mask=!V.mask; $("#b-mask").classList.toggle("on",V.mask); if(!map||!OV.site.mask) return; V.mask?map.append(OV.site.mask):OV.site.mask.remove(); };
 
 function addAssetOverlay(a){
   const { Polygon3DElement, Marker3DInteractiveElement } = lib;
