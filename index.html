@@ -449,23 +449,27 @@ async function initMap(){
   try{ loadGoogle(key); lib=await google.maps.importLibrary("maps3d"); markerLib=await google.maps.importLibrary("marker"); }
   catch(e){ showGate("Could not load Google Maps: "+(e.message||e)); return; }
   const cam=siteCam(), g=siteGeom();
-  map = new lib.Map3DElement({ ...cam, mode:"SATELLITE" });
-  applyCameraLimits();
+  // Camera limits go in the constructor (known-good): setting them as properties before attach left the
+  // engine idle until a camera value was re-assigned by hand.
+  map = new lib.Map3DElement({ ...cam, mode:"SATELLITE", ...cameraLimits(), minAltitude:15 });
   map.addEventListener("gmp-error", e=>showGate("Map error: "+(e.detail?.message||"see console")));
   map.addEventListener("gmp-click", onMapClick);
   $("#canvas-wrap").prepend(map);
   $("#loading").hidden=true;
-  drawSite();
-  ASSETS.forEach(addAssetOverlay);
-  WOS.forEach(addWOOverlay);
-  applyLegend();
+  $("#m-extent").textContent = `${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km · ${BOUNDARY.length} boundary points`;
+  // overlays after first frame so the tile engine starts before we pile geometry on
+  requestAnimationFrame(()=>{ drawSite(); ASSETS.forEach(addAssetOverlay); WOS.forEach(addWOOverlay); applyLegend(); });
+}
+function cameraLimits(){
+  const g=siteGeom();
+  return { bounds:{ north:g.b.north+g.padLat, south:g.b.south-g.padLat, east:g.b.east+g.padLng, west:g.b.west-g.padLng }, maxAltitude:g.maxAlt };
 }
 
 function applyCameraLimits(){
-  const g=siteGeom();
-  // camera centre stays inside the boundary box (+ a small pad); zoom-out capped a little past the recommended framing
-  map.bounds = { north:g.b.north+g.padLat, south:g.b.south-g.padLat, east:g.b.east+g.padLng, west:g.b.west-g.padLng };
-  map.maxAltitude = g.maxAlt; map.minAltitude = 15;
+  // used after a boundary edit, on an already-attached map
+  const g=siteGeom(), L=cameraLimits();
+  map.bounds = L.bounds; map.maxAltitude = L.maxAltitude;
+  const c=siteCam(); map.center=c.center; map.range=c.range; map.tilt=c.tilt; map.heading=c.heading;   // re-assigning the camera wakes the engine
   $("#m-extent").textContent = `${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km · ${BOUNDARY.length} boundary points`;
 }
 
