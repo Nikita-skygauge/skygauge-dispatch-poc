@@ -219,6 +219,9 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 .nph{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#000}.nph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nph svg{position:absolute;inset:0;width:100%;height:100%}.nph text{font-family:var(--mono)}
 .nnum{position:absolute;left:6px;top:6px;background:rgba(11,15,31,.8);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px}
 .nbody{display:flex;flex-direction:column;min-width:0}
+.nph.pin{background:var(--panel);display:flex;align-items:center;justify-content:center}.nph.pin .pintile{width:54%;height:auto;position:static}.nph.pin text{font-family:var(--mono)}.nshape{position:absolute;right:6px;bottom:6px;background:rgba(11,15,31,.8);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:999px}
+.note.pinnote.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+.locbox.compact{padding:8px 10px}.locbox.compact .acts{align-items:center}.locbox.editing .ptrow{padding:2px 6px}.locbox.editing .ptrow .btn.sm{padding:3px 8px;font-size:12px}
 .ntext{font:inherit;font-size:14px;line-height:1.45;flex:1;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--ink);padding:4px 6px;resize:none;min-height:34px;width:100%}.ntext:hover{background:var(--panel)}.ntext:focus{background:var(--panel);border-color:var(--line);box-shadow:none}.ntext::placeholder{color:var(--ink-3);font-style:italic}
 .nmeta{font-size:11.5px;color:var(--ink-3);margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding-left:6px}.nmeta i{width:10px;height:10px;border-radius:50%;display:inline-block;box-shadow:0 0 0 1px rgba(0,0,0,.4) inset;flex:none}
 @media (max-width:860px){ .note{grid-template-columns:104px 1fr;gap:10px} .ntext{font-size:16px} }
@@ -1000,12 +1003,12 @@ function openWO(id,fly){
   const w=W(id); if(!w) return;
   if(S.creating&&S.creating!==id){ cancelCreate(); }   // opening another record abandons the unfinished draft
   if(S.open!==id){ showEmpty=false; showAct=false; actUnsub?.(); ACT=[]; actUnsub=DB.watchCol(WO_COL+"/"+id+"/activity",rows=>{ ACT=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id) renderActivity(); }); }
-  if(S.open!==id){ selPt=null; if(isMobile()) setSheet("half"); } S.open=id; watchPhotos(id); $("#peek").classList.add("on"); $("#reg").classList.remove("open"); renderRecord(); highlightCard(id); syncPointHandles();
+  if(S.open!==id){ selPt=null; editLoc=null; if(isMobile()) setSheet("half"); } S.open=id; watchPhotos(id); $("#peek").classList.add("on"); $("#reg").classList.remove("open"); renderRecord(); highlightCard(id); syncPointHandles();
   if(fly&&map) flyWO(w);
 }
-function closePeek(){ closeViewer(); stopPhotos(); clearPointHandles(); S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
+function closePeek(){ closeViewer(); stopPhotos(); clearPointHandles(); clearPinOverlays(); editLoc=null; S.open=null; $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
 function highlightCard(id){ $$(".kcard.hl").forEach(c=>c.classList.remove("hl")); if(id){ const c=document.querySelector(`.kcard[data-id="${id}"]`); if(c){ c.classList.add("hl"); c.scrollIntoView({block:"nearest"}); } } }
-let lastRendered=null;
+let lastRendered=null, editLoc=null;   // editLoc: the record whose work area is expanded for editing
 function renderRecord(){
   const w=W(S.open); if(!w){ closePeek(); return; }
   // a snapshot (another user's edit, our own noteCount write…) must not wipe a field the user is typing in
@@ -1025,12 +1028,13 @@ function renderRecord(){
       ${showEmpty?empty.map(rowHTML).join(""):""}
       <div class="addprop" id="add-prop">＋ Add a property</div>
     </div>
-    <section class="ps"><h3 style="cursor:default">Location <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${P({none:"— click the model to place points",pin:"Pin",line:"Line",area:"Area · "+P0.length+" corners"}[locKind(P0.length)])}</span></h3><div class="locbox">
-      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${selPt===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">One point makes a pin, two make a line, three or more make an area.${isMobile()?" Tap ＋ Add point, then tap the model; the panel drops out of the way while you place.":" Points can be moved or removed at any time."}</div>`}
+    <section class="ps"><h3 style="cursor:default">Work area <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${P({none:"none yet",pin:"Pin",line:"Line",area:"Area · "+P0.length+" corners · "+locHeight(w)+" m"}[locKind(P0.length)])}</span></h3><div class="locbox ${editLoc===w.id?"editing":"compact"}">
+      ${editLoc!==w.id?`<div class="acts">${P0.length?`<button class="btn sm" id="l-edit">Edit work area</button><button class="btn sm teal" id="l-fly" style="margin-left:auto">Fly to</button>`:`<span class="hint" style="flex:1">No work area yet — one point makes a pin, two a line, three or more an area.</span><button class="btn sm primary" id="l-add">＋ Add points</button>`}</div>`
+      :`${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${selPt===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">One point makes a pin, two make a line, three or more make an area.</div>`}
       <div class="acts"><button class="btn sm ${P0.length?"":"primary"}" id="l-add">＋ Add point${P0.length?"s":""}</button>
       ${P0.length>=3?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="1" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}
       ${P0.length===1?`<label class="hint" style="display:flex;align-items:center;gap:4px">Pin alt <input class="in mono" id="l-alt" type="number" value="${Math.round(P0[0].alt||0)}" style="width:64px;padding:2px 6px"> m</label>`:""}
-      <button class="btn sm teal" id="l-fly" ${P0.length?"":"disabled"} style="margin-left:auto">Fly to</button></div>
+      <button class="btn sm teal" id="l-done" style="margin-left:auto">Done</button></div>`}
     </div></section>
     ${galleryHTML()}
     ${notesHTML()}
@@ -1038,7 +1042,7 @@ function renderRecord(){
     <section class="ps"><h3>Comments</h3><div class="hint">Comments arrive in the next build.</div></section>
     <section class="ps"><h3 id="act-h">${showAct?"▾":"▸"} Activity <span class="mono" style="font-weight:400" id="act-n">${ACT.length}</span></h3><div id="act" ${showAct?"":"hidden"}></div></section>
     <div class="hint" style="margin-top:22px">Created ${P(fmtDate(w.created,true))} by ${P(w.createdBy?.name||"")} · last edited ${P(rel(w.edited))} by ${P(w.editedBy?.name||"")}${w.completedAt?` · completed ${P(fmtDate(w.completedAt,true))}`:""}</div>`;
-  renderActivity(); wireGallery(); wireNotes();
+  renderActivity(); wireGallery(); wireNotes(); syncPinOverlays();
   const t=$("#ptitle"); const fit=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; fit(); t.oninput=fit;
   t.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); t.blur(); } if(e.key==="Escape"){ t.value=w.title||""; fit(); t.blur(); e.stopPropagation(); } };
   t.onblur=()=>setTitle(w.id,t.value.trim());
@@ -1049,8 +1053,10 @@ function renderRecord(){
   $("#toggle-empty")?.addEventListener("click",()=>{ showEmpty=!showEmpty; renderRecord(); });
   $("#add-prop").onclick=e=>propertyCreator(e.currentTarget,p=>{ showEmpty=true; renderRecord(); const el=document.querySelector(`#pbody .pv[data-edit="${p.id}"]`); if(el) startEdit(p,w,el); });
   $("#act-h").onclick=()=>{ showAct=!showAct; renderRecord(); };
-  $("#l-add").onclick=()=>addPoints(w.id);
-  $("#l-fly").onclick=()=>enterWOView(w.id);
+  $("#l-add")?.addEventListener("click",()=>{ editLoc=w.id; addPoints(w.id); renderRecord(); });
+  $("#l-edit")?.addEventListener("click",()=>{ editLoc=w.id; renderRecord(); if(!S.woView) enterWOView(w.id); });
+  $("#l-done")?.addEventListener("click",()=>{ editLoc=null; selPt=null; if(V.draw?.kind==="points") $("#draw-done").click(); renderRecord(); syncPointHandles(); });
+  $("#l-fly")?.addEventListener("click",()=>enterWOView(w.id));
   $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(1,+e.target.value||10)));
   $("#l-alt")?.addEventListener("change",e=>{ const p=pts(w).slice(); p[0]={...p[0],alt:+e.target.value||0}; setPoints(w.id,p); });
   $$("#pbody [data-mv]").forEach(b=>b.onclick=()=>movePoint(w.id,+b.dataset.mv));
@@ -1329,7 +1335,7 @@ function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").
 $("#mode-exit").onclick=()=>{ const d=V.draw; if(d?.kind==="points"){ $("#draw-done").click(); return; } clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 };
-  if(V.draw){ if(!inPoly(p,BOUNDARY())&&V.draw.kind!=="site"){ toast("Outside the site boundary.",true); return; } V.draw.pts.push(p); renderDraw(); V.draw.onChange?.(V.draw.pts.slice()); return; }
+  if(V.draw){ if(!inPoly(p,BOUNDARY())&&V.draw.kind!=="site"){ toast("Outside the site boundary.",true); return; } V.draw.pts.push(p); renderDraw(); V.draw.onChange?.(V.draw.pts.slice()); if(V.draw.max&&V.draw.pts.length>=V.draw.max) $("#draw-done").click(); return; }
   if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); orbitSync(); }
 }
 /* ---------- location points: add (continuous), move, remove, select ---------- */
@@ -1347,13 +1353,13 @@ function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw
   const mode=surf(P); P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,P.length===1?(p.alt||0)+0.5:0.8), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate(selPt===i?"#00FFE5":"#FF6A00",0.85,undefined,i+1).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
   if(selPt!=null&&!V.placing){ setMode("place",`Point ${selPt+1} of ${P.length}`,`<button class="btn sm" id="pt-move">Move</button> <button class="btn sm danger" id="pt-rm">Remove</button>`,true); $("#pt-move").onclick=()=>movePoint(w.id,selPt); $("#pt-rm").onclick=()=>{ const Q=P.slice(); Q.splice(selPt,1); selPt=null; setPoints(w.id,Q); resetMode(); }; }
   else if(!V.placing) resetMode(); }
-function startDraw(kind,opts){ clearDraw(); $("#orbit").hidden=true; V.draw={ kind, pts:(opts.initial||[]).map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}), ...(p.alt?{alt:p.alt}:{}) })), height:opts.height||0, min:opts.min??3, onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
+function startDraw(kind,opts){ clearDraw(); $("#orbit").hidden=true; V.draw={ kind, pts:(opts.initial||[]).map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}), ...(p.alt?{alt:p.alt}:{}) })), height:opts.height||0, min:opts.min??3, max:opts.max||0, onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   const dm=surf(d.pts); d.pts.forEach((p,i)=>{ const m=new lib.Marker3DElement({ position:atSurf(p,0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate("#FF6A00",0.9,undefined,i+1).tpl); map.append(m); OV.draw.push(m); });
   if(d.pts.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:d.pts.length===2?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
   if(d.pts.length>=3&&d.height>0){ const g=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5 }); g.path=[...d.pts,d.pts[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:d.height})); map.append(g); OV.draw.push(g); }
-  const n=d.pts.length; const kind=d.kind==="points"?` → ${ {0:"nothing yet",1:"pin",2:"line"}[n]||"area" }`:"";
+  const n=d.pts.length; const kind=d.kind==="points"?` → ${ {0:"nothing yet",1:"pin",2:"line"}[n]||"area" }`:d.kind==="note"?(d.max?` of ${d.max}`:n<3?` · ${3-n} more for an area`:" · Done when the outline is closed"):"";
   const verb=isMobile()?"tap":"click";
   setMode("draw",d.label,`<b>${n}</b> point${n===1?"":"s"}${kind} · ${verb} the model to add${d.kind==="points"?" · saved as you go":""}${d.kind==="site"&&n<3?" (3 minimum)":""}`,true);
   $("#draw-acts").hidden=false; $("#draw-done").disabled=n<d.min; $("#draw-undo").disabled=!n;
@@ -1646,27 +1652,77 @@ function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGrou
   LOCK=null; fly({ center:{ lat:e.lat, lng:e.lng, altitude:g+2 }, range:60, tilt:62, heading:map.heading??0 },1600); }
 
 
-/* ---------- NOTES: one drawing = one note. Derived from the photos' marks, numbered in creation order across the work order. ---------- */
-function allNotes(){ const photosAsc=PH.slice().sort((a,b)=>a.t.localeCompare(b.t)); const out=[]; photosAsc.forEach((p,pi)=>(p.marks||[]).forEach(m=>out.push({ p, m, photoNo:pi+1 }))); out.sort((a,b)=>(a.m.t||"").localeCompare(b.m.t||"")); out.forEach((n,i)=>n.no=i+1); return out; }
-function markSVG(m){ if(m.type==="point"){ const [x,y]=m.pts[0]; return `<circle cx="${x}" cy="${y}" r="0.045" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.016" text-anchor="middle" font-size="0.05" font-weight="700" fill="#0B0F1F">${m.n||""}</text>`; } return `<path d="M${m.pts.map(q=>q.join(",")).join(" L")}" fill="none" stroke="${m.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
-function notesHTML(){
-  const N=allNotes();
-  return `<section class="ps" id="notes"><h3 style="cursor:default">Notes <span class="mono" style="font-weight:400">${N.length}</span></h3>
-    ${N.length?`<div class="notes">${N.map(n=>`<div class="note" data-pid="${n.p.id}" data-mid="${n.m.id}"><div class="nph"><img src="${n.p.thumb}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none">${markSVG(n.m)}</svg><span class="nnum">${n.no}</span></div>
-      <div class="nbody"><textarea class="ntext" data-pid="${n.p.id}" data-mid="${n.m.id}" rows="1" placeholder="Add a note…">${P(n.m.note||"")}</textarea><div class="nmeta"><i style="background:${n.m.color}"></i>${P(n.m.by||n.p.by?.name||"")} · ${P(fmtDate(n.m.t||n.p.t,true))} · Photo ${n.photoNo}${n.m.type==="point"?` · Point ${n.m.n||""}`:""}</div></div></div>`).join("")}</div>`
-    :`<div class="hint">No notes yet. Open a photo and draw on it — every drawing or point becomes a note here.</div>`}</section>`;
+/* ---------- NOTES: one drawing = one note, plus notes pinned straight onto the model. Numbered in creation order across the work order. ---------- */
+function pinsOf(w){ return (w?.pins||[]).slice(); }
+function allNotes(){
+  const w=W(S.open); const photosAsc=PH.slice().sort((a,b)=>a.t.localeCompare(b.t)); const out=[];
+  photosAsc.forEach((p,pi)=>(p.marks||[]).forEach(m=>out.push({ kind:"mark", id:m.id, p, m, photoNo:pi+1, t:m.t||p.t, text:m.note||"", by:m.by||p.by?.name||"", color:m.color })));
+  pinsOf(w).forEach(k=>out.push({ kind:"pin", id:k.id, k, t:k.t, text:k.text||"", by:k.by||"", color:PIN_NOTE_COLOR }));
+  out.sort((a,b)=>(a.t||"").localeCompare(b.t||"")); out.forEach((n,i)=>n.no=i+1); return out;
 }
-function renderNotes(){ const el=$("#notes"); if(!el) return; el.outerHTML=notesHTML(); wireNotes(); }
+const PIN_NOTE_COLOR="#FFD400";
+function markSVG(m){ if(m.type==="point"){ const [x,y]=m.pts[0]; return `<circle cx="${x}" cy="${y}" r="0.045" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.016" text-anchor="middle" font-size="0.05" font-weight="700" fill="#0B0F1F">${m.n||""}</text>`; } return `<path d="M${m.pts.map(q=>q.join(",")).join(" L")}" fill="none" stroke="${m.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
+function pinTileSVG(no){ return `<svg viewBox="0 0 26 36" class="pintile"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="${PIN_NOTE_COLOR}" stroke="#0B0F1F" stroke-width="1.6"/><text x="13" y="16.6" text-anchor="middle" font-size="${String(no).length>1?"9":"10.5"}" font-weight="700" fill="#0B0F1F">${no}</text></svg>`; }
+function notesHTML(){
+  const N=allNotes(); const verb=isMobile()?"Tap":"Click";
+  return `<section class="ps" id="notes"><h3 style="cursor:default;display:flex;align-items:center;gap:8px">Notes <span class="mono" style="font-weight:400">${N.length}</span><button class="btn sm" id="n-pin" style="margin-left:auto" title="Add a pin, line or area note on the model">＋ Note on model</button></h3>
+    ${N.length?`<div class="notes">${N.map(n=>n.kind==="mark"
+      ?`<div class="note" data-kind="mark" data-pid="${n.p.id}" data-mid="${n.m.id}"><div class="nph"><img src="${n.p.thumb}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none">${markSVG(n.m)}</svg><span class="nnum">${n.no}</span></div>
+        <div class="nbody"><textarea class="ntext" data-pid="${n.p.id}" data-mid="${n.m.id}" rows="1" placeholder="Add a note…">${P(n.text)}</textarea><div class="nmeta"><i style="background:${n.color}"></i>${P(n.by)} · ${P(fmtDate(n.t,true))} · Photo ${n.photoNo}${n.m.type==="point"?` · Point ${n.m.n||""}`:""}</div></div></div>`
+      :`<div class="note pinnote ${n.id===selPin?"sel":""}" data-kind="pin" data-kid="${n.id}"><div class="nph pin">${pinTileSVG(n.no)}<span class="nnum">${n.no}</span><span class="nshape">${NOTE_SHAPES[noteShape(n.k)].label}</span></div>
+        <div class="nbody"><textarea class="ntext" data-kid="${n.id}" rows="1" placeholder="What's here?">${P(n.text)}</textarea><div class="nmeta"><i style="background:${n.color}"></i>${P(n.by)} · ${P(fmtDate(n.t,true))} · ${NOTE_SHAPES[noteShape(n.k)].label} on the model<span style="margin-left:auto;display:flex;gap:4px"><button class="btn sm" data-kmv="${n.id}" title="Place this note again on the model">Move</button><button class="btn sm" data-krm="${n.id}" title="Remove this note">✕</button></span></div></div></div>`).join("")}</div>`
+    :`<div class="hint">No notes yet. Draw on a photo, or add a pin, line or area note straight onto the model.</div>`}</section>`;
+}
+function renderNotes(){ const el=$("#notes"); if(!el) return; el.outerHTML=notesHTML(); wireNotes(); syncPinOverlays(); }
 function wireNotes(){
   const w=W(S.open); if(!w) return;
-  $$("#notes .note").forEach(c=>c.onclick=e=>{ if(e.target.closest("textarea")) return; openViewer(c.dataset.pid,c.dataset.mid); });
+  $("#n-pin")?.addEventListener("click",e=>addPinNote(w.id,e.currentTarget));
+  $$("#notes .note[data-kind=mark]").forEach(c=>c.onclick=e=>{ if(e.target.closest("textarea,button")) return; openViewer(c.dataset.pid,c.dataset.mid); });
+  $$("#notes .note[data-kind=pin]").forEach(c=>c.onclick=e=>{ if(e.target.closest("textarea,button")) return; focusPinNote(w.id,c.dataset.kid,true); });
+  $$("#notes [data-kmv]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); movePinNote(w.id,b.dataset.kmv); });
+  $$("#notes [data-krm]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); removePinNote(w.id,b.dataset.krm); });
   $$("#notes .ntext").forEach(t=>{ const grow=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; grow(); t.oninput=grow;
-    t.onblur=()=>{ const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); flashSaved(t,()=>DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) })).then(()=>markSaved()).catch(()=>{}); logNote(w.id,p,m,"wrote"); } };
+    t.onblur=()=>{ if(t.dataset.kid){ setPinText(w.id,t.dataset.kid,t.value.trim(),t); return; } const p=PH.find(x=>x.id===t.dataset.pid); const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); flashSaved(t,()=>DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) })).then(()=>markSaved()).catch(()=>{}); logNote(w.id,p,m,"wrote"); } };
     t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
 }
 function photoNo(p){ const asc=PH.slice().sort((a,b)=>a.t.localeCompare(b.t)); const i=asc.findIndex(x=>x.id===p.id); return i<0?"":i+1; }
 function logNote(woId,p,m,verb){ const txt=(m.note||"").trim(); log(woId, txt?`${verb} a note on photo ${photoNo(p)}: “${txt.slice(0,80)}${txt.length>80?"…":""}”`:`cleared a note on photo ${photoNo(p)}`); }
-function noteCount(){ return PH.reduce((s,p)=>s+(p.marks?.length||0),0); }
+function noteCount(){ return PH.reduce((s,p)=>s+(p.marks?.length||0),0)+pinsOf(W(S.open)).length; }
+
+/* ---------- pinned notes: a numbered pin on the model with a text note in the Notes list ---------- */
+let selPin=null; const PINOV={};   // pin id → marker (for the open record only)
+async function savePins(id,pins,anchor){ const w=W(id); if(!w) return; w.pins=pins; renderNotes(); const n=noteCount(); w.noteCount=n; await flashSaved(anchor||$("#notes h3"),()=>DB.update(WO_COL+"/"+id,{ pins, noteCount:n, ...stamp() })); }
+/* a model note is a pin (1 point), a line (2) or an area (3+): the user picks the shape, then places the points */
+const NOTE_SHAPES={ pin:{ label:"Pin", min:1, max:1, hint:"one spot" }, line:{ label:"Line", min:2, max:2, hint:"two ends" }, area:{ label:"Area", min:3, max:0, hint:"three or more corners" } };
+function notePts(k){ return k.points||(k.lat!=null?[{ lat:k.lat, lng:k.lng, ground:k.ground }]:[]); }
+function noteShape(k){ const n=notePts(k).length; return n<=1?"pin":n===2?"line":"area"; }
+function addPinNote(id,anchor){ if(!map){ toast("The map is not loaded.",true); return; } const w=W(id); if(!w) return;
+  const el=openPop(anchor||$("#n-pin"),`<div class="sec">Note on the model</div>${Object.entries(NOTE_SHAPES).map(([k,v])=>`<div class="mi" data-shape="${k}"><b style="min-width:44px">${v.label}</b><span class="hint">${v.hint}</span></div>`).join("")}`,{width:240,noFocus:true});
+  el.querySelectorAll("[data-shape]").forEach(m=>m.onclick=()=>{ closePop(); drawNote(id,null,m.dataset.shape); }); }
+function drawNote(id,kid,shape){ const sh=NOTE_SHAPES[shape]; const w=W(id); if(!w||!map) return; if(!S.woView) enterWOView(id); setTab("map"); closeViewer(); if(isMobile()) setSheet("peek");
+  const existing=kid?pinsOf(w).find(x=>x.id===kid):null; const verb=isMobile()?"Tap":"Click";
+  startDraw("note",{ initial:kid?[]:[], label:`${sh.label} note`, min:sh.min, max:sh.max,
+    onDone:async P=>{ if(P.length<sh.min){ toast(`A ${sh.label.toLowerCase()} needs ${sh.hint}.`,true); return; } const pts=P.map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}) }));
+      let pins=pinsOf(W(id)); let k; if(existing){ pins=pins.map(x=>x.id===kid?(k={ ...x, points:pts }):x); } else { k={ id:uid(), points:pts, text:"", by:S.user.name, t:now() }; pins=[...pins,k]; }
+      selPin=k.id; await savePins(id,pins); log(id, existing?`moved a ${sh.label.toLowerCase()} note on the model`:`added a ${sh.label.toLowerCase()} note on the model`); if(isMobile()) setSheet("half");
+      if(!existing) setTimeout(()=>{ const t=$(`#notes .ntext[data-kid="${k.id}"]`); t?.scrollIntoView({block:"center"}); t?.focus(); },60); },
+    onCancel:()=>{ if(isMobile()) setSheet("half"); } });
+  toast(`${verb} the model: ${sh.hint}${sh.max?"":" — then Done"}.`); }
+function movePinNote(id,kid){ const k=pinsOf(W(id)).find(x=>x.id===kid); if(!k) return; drawNote(id,kid,noteShape(k)); }
+function removePinNote(id,kid){ const k=pinsOf(W(id)).find(x=>x.id===kid); if(!k) return; if(k.text&&!confirm("Remove this note?")) return; if(selPin===kid) selPin=null; savePins(id,pinsOf(W(id)).filter(x=>x.id!==kid)); log(id,k.text?`removed a pinned note: “${k.text.slice(0,80)}”`:"removed an empty pinned note"); }
+function setPinText(id,kid,text,anchor){ const pins=pinsOf(W(id)); const k=pins.find(x=>x.id===kid); if(!k||(k.text||"")===text) return; k.text=text; const w=W(id); w.pins=pins; flashSaved(anchor,()=>DB.update(WO_COL+"/"+id,{ pins, ...stamp() })); log(id, text?`wrote a pinned note: “${text.slice(0,80)}${text.length>80?"…":""}”`:"cleared a pinned note"); }
+function focusPinNote(id,kid,flyTo){ selPin=kid; $$("#notes .pinnote").forEach(c=>c.classList.toggle("sel",c.dataset.kid===kid)); syncPinOverlays();
+  const k=pinsOf(W(id)).find(x=>x.id===kid); if(k&&flyTo&&map){ if(!S.woView) enterWOView(id); const a=noteAnchor(k); const P=notePts(k); const ext=P.length>=2?Math.max(extentM(bbox(P)).ns,extentM(bbox(P)).ew):0; fly({ center:{ lat:a.lat, lng:a.lng, altitude:(a.ground??GROUND_FALLBACK)+2 }, range:Math.max(70,ext*1.8), tilt:62, heading:map.heading??0 },1200); }
+  if(!flyTo){ const c=$(`#notes .pinnote[data-kid="${kid}"]`); c?.scrollIntoView({ block:"center", behavior:"smooth" }); if(isMobile()) setSheet("half"); } }
+function noteAnchor(k){ const P=notePts(k); if(P.length===1) return P[0]; const c=centroid(P); const g=P.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?g.reduce((a,b)=>a+b,0)/g.length:undefined }; }
+function clearPinOverlays(){ Object.values(PINOV).forEach(a=>a.forEach(x=>x.remove())); for(const k in PINOV) delete PINOV[k]; }
+function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open) return; const w=W(S.open); if(!w) return; const N=allNotes().filter(n=>n.kind==="pin");
+  N.forEach(n=>{ const k=n.k, P=notePts(k); if(!P.length) return; const parts=[]; const mode=surf(P); const col=selPin===k.id?"#FFFFFF":PIN_NOTE_COLOR; const rgbc=selPin===k.id?"255,255,255":"255,212,0";
+    const a=noteAnchor(k); const m=new lib.Marker3DInteractiveElement({ position:atSurf(a,P.length===1?0.6:1.2), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true });
+    m.append(pinTemplate(col,0.95,undefined,n.no).tpl); m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); focusPinNote(w.id,k.id,false); }); map.append(m); parts.push(m);
+    if(P.length===2){ const l=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgbc},0.95)`, strokeWidth:5, drawsOccludedSegments:true }); l.path=P.map(p=>atSurf(p,0.8)); map.append(l); parts.push(l); }
+    if(P.length>=3){ const g=new lib.Polygon3DElement({ altitudeMode:mode, fillColor:`rgba(${rgbc},0.25)`, strokeColor:`rgba(${rgbc},0.95)`, strokeWidth:3, drawsOccludedSegments:true }); g.path=[...P,P[0]].map(p=>atSurf(p,0.8)); g.addEventListener?.("gmp-click",ev=>{ if(V.draw||V.placing) return; focusPinNote(w.id,k.id,false); }); map.append(g); parts.push(g); }
+    PINOV[k.id]=parts; }); }
 
 boot();
 </script>
