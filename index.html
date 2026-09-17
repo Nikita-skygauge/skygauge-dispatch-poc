@@ -1287,14 +1287,21 @@ function syncAssetOverlays(){ /* assets carry no location (register only) */ }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
 function woColor(w){ return col(status(w.statusId)?.color).map; }
 function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
+/* Points stay where they were clicked on the model (roof, platform, shell) instead of dropping to the ground: each point
+   stores the surface altitude `ground` from the click, and overlays use ABSOLUTE altitude from it. Legacy points without
+   it fall back to RELATIVE_TO_MESH, which also sits on the surface. */
+function surf(P){ return P.every(p=>p.ground!=null)?"ABSOLUTE":"RELATIVE_TO_MESH"; }
+function atSurf(p,lift){ return { lat:p.lat, lng:p.lng, altitude:(p.ground!=null?p.ground:0)+lift }; }
 function addWOOverlay(w){
   const P=pts(w); if(!P.length||w.draft) return;
   const o={ sig:JSON.stringify(w.location||{}), m:null, pin:null, area:null, line:null };
   const c=woColor(w); const a=locAnchor(w); const h=locHeight(w);
-  o.m=new lib.Marker3DInteractiveElement({ position:{lat:a.lat,lng:a.lng,altitude:P.length===1?(a.alt||0):P.length===2?2:h}, altitudeMode:"RELATIVE_TO_GROUND", extruded:P.length===1, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
+  const mode=surf(P); const topLift=P.length===1?(a.alt||0)+0.3:P.length===2?2:h;
+  o.m=new lib.Marker3DInteractiveElement({ position:atSurf(a,topLift), altitudeMode:mode, extruded:P.length===1, label:w.id.slice(-3), sizePreserved:true, drawsWhenOccluded:true });
   o.pin=pinTemplate(c,1.0); o.m.append(o.pin.tpl); o.m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); enterWOView(w.id); }); map.append(o.m);
-  if(P.length===2){ o.line=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_GROUND", strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:5, drawsOccludedSegments:true }); o.line.path=P.map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(o.line); }
-  if(P.length>=3){ o.area=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:h})); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; enterWOView(w.id); }); map.append(o.area); }
+  if(P.length===2){ o.line=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:5, drawsOccludedSegments:true }); o.line.path=P.map(p=>atSurf(p,1)); map.append(o.line); }
+  if(P.length>=3){ o.area=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:h})); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; enterWOView(w.id); }); map.append(o.area);
+    o.line=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:3, drawsOccludedSegments:true }); o.line.path=[...P,P[0]].map(p=>atSurf(p,0.8)); map.append(o.line); }
   OV.wo[w.id]=o; applyLegendTo(w);
 }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
@@ -1320,7 +1327,7 @@ function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#s
 function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view",isMobile()?"Tap a pin or an area to open it.":"Click a pin or a work area to open it.",false); }
 $("#mode-exit").onclick=()=>{ const d=V.draw; if(d?.kind==="points"){ $("#draw-done").click(); return; } clearDraw(); V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; if(d?.onCancel) d.onCancel(); resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
-  if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round(e.position.altitude||0) };
+  if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 };
   if(V.draw){ if(!inPoly(p,BOUNDARY())&&V.draw.kind!=="site"){ toast("Outside the site boundary.",true); return; } V.draw.pts.push(p); renderDraw(); V.draw.onChange?.(V.draw.pts.slice()); return; }
   if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); orbitSync(); }
 }
@@ -1336,14 +1343,14 @@ function selectPoint(i){ selPt=selPt===i?null:i; syncPointHandles(); if(S.open) 
 const PTH=[];
 function clearPointHandles(){ PTH.forEach(x=>x.remove()); PTH.length=0; }
 function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw) return; const w=W(S.open); if(!w) return; const P=pts(w); if(P.length<1) { if(!V.placing) resetMode(); return; }
-  P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:{lat:p.lat,lng:p.lng,altitude:P.length===1?(p.alt||0)+0.5:1}, altitudeMode:"RELATIVE_TO_GROUND", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate(selPt===i?"#00FFE5":"#FF6A00",0.7).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
+  const mode=surf(P); P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,P.length===1?(p.alt||0)+0.5:0.8), altitudeMode:mode, label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate(selPt===i?"#00FFE5":"#FF6A00",0.7).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
   if(selPt!=null&&!V.placing){ setMode("place",`Point ${selPt+1} of ${P.length}`,`<button class="btn sm" id="pt-move">Move</button> <button class="btn sm danger" id="pt-rm">Remove</button>`,true); $("#pt-move").onclick=()=>movePoint(w.id,selPt); $("#pt-rm").onclick=()=>{ const Q=P.slice(); Q.splice(selPt,1); selPt=null; setPoints(w.id,Q); resetMode(); }; }
   else if(!V.placing) resetMode(); }
 function startDraw(kind,opts){ clearDraw(); $("#orbit").hidden=true; V.draw={ kind, pts:(opts.initial||[]).map(p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}), ...(p.alt?{alt:p.alt}:{}) })), height:opts.height||0, min:opts.min??3, onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, label:opts.label }; map.classList.add("drawing"); renderDraw(); }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
-  d.pts.forEach((p,i)=>{ const m=new lib.Marker3DElement({ position:{lat:p.lat,lng:p.lng,altitude:2}, altitudeMode:"RELATIVE_TO_MESH", label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate("#FF6A00",0.8).tpl); map.append(m); OV.draw.push(m); });
-  if(d.pts.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_MESH", strokeColor:"rgba(255,106,0,0.95)", strokeWidth:d.pts.length===2?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>({lat:p.lat,lng:p.lng,altitude:1})); map.append(l); OV.draw.push(l); }
+  const dm=surf(d.pts); d.pts.forEach((p,i)=>{ const m=new lib.Marker3DElement({ position:atSurf(p,0.8), altitudeMode:dm, label:String(i+1), sizePreserved:true, drawsWhenOccluded:true }); m.append(pinTemplate("#FF6A00",0.8).tpl); map.append(m); OV.draw.push(m); });
+  if(d.pts.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:d.pts.length===2?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.pts.length>=3?[d.pts[0]]:[])].map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
   if(d.pts.length>=3&&d.height>0){ const g=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", extruded:true, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5 }); g.path=[...d.pts,d.pts[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:d.height})); map.append(g); OV.draw.push(g); }
   const n=d.pts.length; const kind=d.kind==="points"?` → ${ {0:"nothing yet",1:"pin",2:"line"}[n]||"area" }`:"";
   const verb=isMobile()?"tap":"click";
