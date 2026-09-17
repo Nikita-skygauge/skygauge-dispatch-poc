@@ -1418,9 +1418,9 @@ async function cancelCreate(){
    workorders/{id}/photos/{pid}     { t, by, w, h, bytes, thumb(dataURL 320px), caption, pose:{raw,corrected,source} }
    workorders/{id}/photofull/{pid}  { data(dataURL ≤600KB) }
    ===================================================================== */
-const EYE_H=1.6, WEDGE_LEN=12, WEDGE_HALF=30;
+const EYE_H=1.6, WEDGE_LEN=22, WEDGE_HALF=28, RAY_LEN=30;
 let PH=[], phUnsub=null, phWO=null;               // photos of the open record
-const PHOV={};                                     // photo overlays on the model: pid → {m, wedge}
+const PHOV={};                                     // photo overlays on the model: pid → {m, sight[]}
 const fullCache=new Map();
 
 /* Firestore rejects nested arrays, so mark points travel as a flat [x0,y0,x1,y1,…] list and live in memory as [[x,y],…]. */
@@ -1626,21 +1626,33 @@ function wedgePath(e,ground){
   const pt=a=>({ ...offset(e.lat,e.lng,Math.sin(a)*dl,Math.cos(a)*dl), altitude:base+dz });
   return [ { lat:e.lat, lng:e.lng, altitude:base }, pt(h-half), pt(h+half), { lat:e.lat, lng:e.lng, altitude:base } ];
 }
+/* the camera's line of sight: a thick ray from the camera along its heading, ending in an arrowhead — drawn through the mesh so it never hides behind the asset */
+function rayPath(e,ground){ const base=ground+EYE_H+0.6; const h=(e.heading??0)*Math.PI/180, pitch=(e.pitch??0)*Math.PI/180; const dl=Math.cos(pitch)*RAY_LEN, dz=Math.sin(pitch)*RAY_LEN;
+  return [ { lat:e.lat, lng:e.lng, altitude:base }, { ...offset(e.lat,e.lng,Math.sin(h)*dl,Math.cos(h)*dl), altitude:base+dz } ]; }
+function arrowPath(e,ground){ const base=ground+EYE_H+0.6; const h=(e.heading??0)*Math.PI/180, pitch=(e.pitch??0)*Math.PI/180; const dl=Math.cos(pitch)*RAY_LEN, dz=Math.sin(pitch)*RAY_LEN; const L=5, Wd=3;
+  const tip={ ...offset(e.lat,e.lng,Math.sin(h)*dl,Math.cos(h)*dl), altitude:base+dz }; const b=dl-L; const bl=offset(e.lat,e.lng,Math.sin(h)*b+Math.sin(h-Math.PI/2)*Wd,Math.cos(h)*b+Math.cos(h-Math.PI/2)*Wd), br=offset(e.lat,e.lng,Math.sin(h)*b+Math.sin(h+Math.PI/2)*Wd,Math.cos(h)*b+Math.cos(h+Math.PI/2)*Wd);
+  return [ tip, { ...bl, altitude:base+dz }, { ...br, altitude:base+dz }, tip ]; }
+function makeSight(e,color){ const rgb=color==="#FFFFFF"?"255,255,255":"0,255,229"; const parts=[];
+  const wedge=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", fillColor:`rgba(${rgb},0.38)`, strokeColor:`rgba(${rgb},1)`, strokeWidth:3, drawsOccludedSegments:true }); wedge.path=wedgePath(e,0); parts.push(wedge);
+  const halo=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_GROUND", strokeColor:"rgba(11,15,31,0.9)", strokeWidth:10, drawsOccludedSegments:true }); halo.path=rayPath(e,0); parts.push(halo);
+  const ray=new lib.Polyline3DElement({ altitudeMode:"RELATIVE_TO_GROUND", strokeColor:`rgba(${rgb},1)`, strokeWidth:5, drawsOccludedSegments:true }); ray.path=rayPath(e,0); parts.push(ray);
+  const head=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", fillColor:`rgba(${rgb},1)`, strokeColor:"rgba(11,15,31,0.9)", strokeWidth:2, drawsOccludedSegments:true }); head.path=arrowPath(e,0); parts.push(head);
+  parts.forEach(x=>map.append(x)); return parts; }
 function photoGround(p){ const e=effPose(p); const w=W(S.open); return e?.ground ?? locAnchor(w)?.ground ?? GROUND_FALLBACK; }
 function syncPhotoOverlays(){
   if(!map||!lib) return;
   const want=new Set(PH.filter(hasPos).map(p=>p.id));
-  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].wedge?.remove(); delete PHOV[id]; } });
-  PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e); const o=PHOV[p.id]; if(o&&o.sig===sig) return; o?.m.remove(); o?.wedge?.remove();
+  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].sight?.forEach(x=>x.remove()); delete PHOV[id]; } });
+  PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e); const o=PHOV[p.id]; if(o&&o.sig===sig) return; o?.m.remove(); o?.sight?.forEach(x=>x.remove());
     const fill=o?.hl?"#FFFFFF":"#00FFE5";
     const m=new lib.Marker3DInteractiveElement({ position:{ lat:e.lat, lng:e.lng, altitude:EYE_H }, altitudeMode:"RELATIVE_TO_GROUND", sizePreserved:true, drawsWhenOccluded:true }); m.append(tpl(camSvg(fill)));
     m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); openViewer(p.id); }); map.append(m);
-    let wedge=null; if(e.heading!=null){ wedge=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", fillColor:"rgba(0,255,229,0.28)", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:2, drawsOccludedSegments:true }); wedge.path=wedgePath(e,0); map.append(wedge); }
-    PHOV[p.id]={ m, wedge, sig, hl:o?.hl||false }; });
+    const sight=e.heading!=null?makeSight(e,fill):[];
+    PHOV[p.id]={ m, sight, sig, hl:o?.hl||false }; });
 }
 function tpl(svg){ const t=document.createElement("template"); t.content.append(svg); return t; }
-function previewPose(p,e){ const o=PHOV[p.id]; if(!o||!map) return; if(!o.wedge){ o.wedge=new lib.Polygon3DElement({ altitudeMode:"RELATIVE_TO_GROUND", fillColor:"rgba(0,255,229,0.28)", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:2, drawsOccludedSegments:true }); map.append(o.wedge); } o.wedge.path=wedgePath(e,0); }
-function clearPhotoOverlays(){ Object.values(PHOV).forEach(o=>{ o.m.remove(); o.wedge?.remove(); }); for(const k in PHOV) delete PHOV[k]; }
+function previewPose(p,e){ const o=PHOV[p.id]; if(!o||!map) return; o.sight?.forEach(x=>x.remove()); o.sight=makeSight(e,o.hl?"#FFFFFF":"#00FFE5"); }
+function clearPhotoOverlays(){ Object.values(PHOV).forEach(o=>{ o.m.remove(); o.sight?.forEach(x=>x.remove()); }); for(const k in PHOV) delete PHOV[k]; }
 function highlightPhoto(pid){ Object.entries(PHOV).forEach(([id,o])=>{ const hl=id===pid; if(hl!==o.hl){ o.hl=hl; o.sig=""; } }); $$("#gal .th").forEach(t=>t.classList.toggle("hl",t.dataset.pid===pid)); syncPhotoOverlays(); }
 function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGround(p); const h=e.heading??0; const back=offset(e.lat,e.lng,-Math.sin(h*Math.PI/180)*6,-Math.cos(h*Math.PI/180)*6);
   LOCK=null; fly({ center:{ lat:back.lat, lng:back.lng, altitude:g+EYE_H+4 }, range:45, tilt:72, heading:h },1600); }
