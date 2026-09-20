@@ -119,6 +119,9 @@ gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 
 /* jobs page */
 #view-wo{display:flex;flex-direction:column;background:var(--ground);transition:margin-right .2s ease}
+#draw-preview{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;display:none}
+/* while the 3D selector is active the mode banner hides; the actions ride on the model instead */
+body.drawing #mode{display:none!important}
 /* notes v2 */
 .ncard{cursor:pointer}.ntile{position:relative;width:100%}.nph .kico{font-size:30px}.kico.big{font-size:22px}
 .ntitle{font-weight:600;font-size:14px;line-height:1.3}.npreview{font-size:12.5px;color:var(--ink-3);margin-top:2px;line-height:1.35;max-height:2.7em;overflow:hidden}
@@ -228,11 +231,11 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 /* notes (one drawing = one note) */
 .notes{display:flex;flex-direction:column;gap:8px}
 .note{display:grid;grid-template-columns:140px 1fr;gap:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px;cursor:pointer}
-.note:hover{border-color:var(--accent)}
+.note:hover{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}.note.ncard.sel,.note.pinnote.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
 .nph{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#000}.nph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nph svg{position:absolute;inset:0;width:100%;height:100%}.nph text{font-family:var(--mono)}
 .nnum{position:absolute;left:6px;top:6px;background:rgba(11,15,31,.8);color:#fff;font-family:var(--mono);font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px}
 .nbody{display:flex;flex-direction:column;min-width:0}
-.nph.pin{background:var(--panel);display:flex;align-items:center;justify-content:center}.nph.pin .pintile{width:54%;height:auto;position:static}.nph.pin text{font-family:var(--mono)}.nshape{position:absolute;right:6px;bottom:6px;background:rgba(11,15,31,.8);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:999px}
+.nph.pin{background:var(--panel);display:flex;align-items:center;justify-content:center}.nph.pin .pintile{width:54%;height:auto;position:static}.nph>svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.nph.pin text{font-family:var(--mono)}.nshape{position:absolute;right:6px;bottom:6px;background:rgba(11,15,31,.8);color:#fff;font-size:10.5px;padding:1px 6px;border-radius:999px}
 .note.pinnote.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
 .locbox.compact{padding:8px 10px}.locbox.compact .acts{align-items:center}.locbox.editing .ptrow{padding:2px 6px}.locbox.editing .ptrow .btn.sm{padding:3px 8px;font-size:12px}
 .ntext{font:inherit;font-size:14px;line-height:1.45;flex:1;background:transparent;border:1px solid transparent;border-radius:6px;color:var(--ink);padding:4px 6px;resize:none;min-height:34px;width:100%}.ntext:hover{background:var(--panel)}.ntext:focus{background:var(--panel);border-color:var(--line);box-shadow:none}.ntext::placeholder{color:var(--ink-3);font-style:italic}
@@ -1298,7 +1301,7 @@ async function exportJSON(){
 /* =====================================================================
    MAP — Google photorealistic 3D, camera bounded to the site
    ===================================================================== */
-let map=null, lib=null; const OV={ wo:{}, asset:{}, site:null, draw:[] }; let placePin=null;
+let map=null, lib=null; const OV={ wo:{}, asset:{}, site:null, draw:[], act:[] }; let placePin=null;
 const V={ draw:null, placing:null };
 const BOUNDARY=()=>S.site?.boundary||DEFAULT_BOUNDARY;
 function inPoly(p,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat))&&(p.lng<(b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
@@ -1326,10 +1329,34 @@ let mapInit=false;
 function stubMaps3D(){ class El{ constructor(o){ Object.assign(this,o||{}); this.children=[]; this.style={}; this.listeners={}; } append(...c){ this.children.push(...c); c.forEach(x=>x.parent=this); } remove(){ if(this.parent){ this.parent.children=this.parent.children.filter(x=>x!==this); this.parent=null; } } addEventListener(t,f){ (this.listeners[t]??=[]).push(f); } removeEventListener(t,f){ this.listeners[t]=(this.listeners[t]||[]).filter(x=>x!==f); } fire(t,e){ (this.listeners[t]||[]).forEach(f=>f(e||{})); } }
   class M3 extends El{ constructor(o){ super(o); this.classList=document.createElement("div").classList; this.center=o?.center; this.range=o?.range; this.tilt=o?.tilt; this.heading=o?.heading; } flyCameraTo({endCamera}){ Object.assign(this,endCamera||{}); setTimeout(()=>this.fire("gmp-animationend"),10); } flyCameraAround(){} }
   return { Map3DElement:M3, Marker3DElement:El, Marker3DInteractiveElement:El, Polyline3DElement:El, Polygon3DElement:El }; }
+/* Desktop preview while placing points: a dashed line from the latest point to the cursor and a translucent pin under it.
+   Maps 3D has no hover position and no projection API, so the latest point is projected here with a pinhole model of
+   Google's camera (center, range, tilt, heading, vertical fov); each real click is used to check the projection error and
+   the line is hidden if the model is off by more than a third of the viewport. */
+const PV={ svg:null, mouse:null, err:0, on:false };
+function projectLL(q){ if(!map||!map.center) return null; const el=map; const W=el.clientWidth, H=el.clientHeight; if(!W||!H) return null;
+  const C=map.center, lat0=C.lat*Math.PI/180; const h=(map.heading||0)*Math.PI/180, t=(map.tilt||0)*Math.PI/180, r=map.range||300, fov=((map.fov||35)*Math.PI/180);
+  const enu=p=>[ (p.lng-C.lng)*111320*Math.cos(lat0), (p.lat-C.lat)*111320, (p.altitude??p.alt??0)-(C.altitude||0) ];
+  const P=[ -Math.sin(h)*Math.sin(t)*r, -Math.cos(h)*Math.sin(t)*r, Math.cos(t)*r ];                 // camera position (ENU, metres from the look-at point)
+  const f=[ -P[0]/r, -P[1]/r, -P[2]/r ];                                                              // forward: camera → look-at
+  const up0=[0,0,1]; let rt=[ f[1]*up0[2]-f[2]*up0[1], f[2]*up0[0]-f[0]*up0[2], f[0]*up0[1]-f[1]*up0[0] ]; const rl=Math.hypot(...rt)||1; rt=rt.map(x=>x/rl);
+  const u=[ rt[1]*f[2]-rt[2]*f[1], rt[2]*f[0]-rt[0]*f[2], rt[0]*f[1]-rt[1]*f[0] ];
+  const Q=enu(q); const v=[ Q[0]-P[0], Q[1]-P[1], Q[2]-P[2] ]; const z=v[0]*f[0]+v[1]*f[1]+v[2]*f[2]; if(z<=1) return null;
+  const x=v[0]*rt[0]+v[1]*rt[1]+v[2]*rt[2], y=v[0]*u[0]+v[1]*u[1]+v[2]*u[2]; const focal=(H/2)/Math.tan(fov/2);
+  return { x:W/2+x*focal/z, y:H/2-y*focal/z }; }
+function previewInit(){ if(!map||PV.svg||!matchMedia("(pointer:fine)").matches) return; const wrap=$("#canvas-wrap"); const s=document.createElementNS("http://www.w3.org/2000/svg","svg"); s.id="draw-preview"; s.innerHTML=`<line id="pv-line" stroke="#FF6A00" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/><g id="pv-pin" opacity="0.55"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="#FF6A00" stroke="#0B0F1F" stroke-width="1.6"/><circle cx="13" cy="13" r="4.2" fill="#0B0F1F"/></g>`; wrap.append(s); PV.svg=s;
+  wrap.addEventListener("mousemove",e=>{ const r=map.getBoundingClientRect(); PV.mouse={ x:e.clientX-r.left, y:e.clientY-r.top }; previewDraw(); });
+  wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; previewDraw(); });
+  ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,previewDraw)); }
+function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&!d.closed&&PV.mouse); s.style.display=show?"block":"none"; if(!show) return;
+  const pin=s.querySelector("#pv-pin"); pin.setAttribute("transform",`translate(${PV.mouse.x-13*0.9},${PV.mouse.y-36*0.9}) scale(0.9)`);
+  const line=s.querySelector("#pv-line"); const last=d.pts.length?d.pts[d.moving&&d.sel!=null?Math.max(0,d.sel-1):d.pts.length-1]:null; const from=last&&PV.err<0.34?projectLL({ lat:last.lat, lng:last.lng, altitude:(last.ground??0)+0.8 }):null;
+  if(from&&d.pts.length&&!d.moving){ line.style.display="block"; line.setAttribute("x1",from.x); line.setAttribute("y1",from.y); line.setAttribute("x2",PV.mouse.x); line.setAttribute("y2",PV.mouse.y); } else line.style.display="none"; }
+function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.lat, lng:p.lng, altitude:p.ground }); if(!s) return; const H=map.clientHeight||1; const err=Math.hypot(s.x-PV.mouse.x,s.y-PV.mouse.y)/H; PV.err=PV.err?PV.err*0.5+err*0.5:err; if(PARAMS.has("debug")) console.log("preview projection error",(err*100).toFixed(1)+"% of viewport"); }
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
   if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); $("#mapgate").hidden=true; $("#loading").hidden=true;
-    window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill") };
+    window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>OV.act.find(m=>m.actKey===k)?.fire("gmp-click",{}), acts:()=>OV.act.map(m=>m.actKey) };
     requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); }); return; }
   const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
@@ -1338,8 +1365,9 @@ async function initMap(){
   map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", gestureHandling:"GREEDY", defaultUIDisabled:true });   // no Google on-screen buttons (zoom/pan/tilt/compass); gestures only   // GREEDY = plain Google Maps gestures: scroll zooms without a modifier key, one-finger drag pans. AUTO falls back to "cooperative" (⌘+scroll) in some layouts.
   map.addEventListener("gmp-error",e=>showMapGate("Map error: "+(e.detail?.message||"see console")));
   map.addEventListener("gmp-click",onMapClick); installLock();
+  ["gmp-rangechange","gmp-tiltchange"].forEach(ev=>map.addEventListener(ev,()=>{ if(V.draw) renderActs(); }));
   map.addEventListener("dblclick",()=>{ if(S.woView&&S.open&&!V.draw&&!V.placing){ const w=W(S.open); if(w) flyWO(w); } });
-  $("#canvas-wrap").prepend(map); $("#loading").hidden=true;
+  $("#canvas-wrap").prepend(map); $("#loading").hidden=true; previewInit(); if(PARAMS.has("debug")) window.__projectLL=projectLL;
   $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`;
   requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); });
 }
@@ -1391,7 +1419,7 @@ function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#s
 function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view",isMobile()?"Tap a pin or an area to open it.":"Click a pin or a job area to open it.",false); }
 $("#mode-exit").onclick=()=>{ const d=V.draw; if(d){ if(d.live){ $("#draw-done").click(); return; } selCancel(); return; } V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
-  if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 };
+  if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 }; previewCheck(p);
   if(V.draw){ const d=V.draw; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
     if(d.moving&&d.sel!=null){ d.pts[d.sel]={ ...d.pts[d.sel], ...p }; d.moving=false; d.sel=null; selChanged(); return; }
     if(d.closed){ toast("The area is closed — Undo reopens it, or press Done.",true); return; }
@@ -1418,7 +1446,7 @@ function select3D(opts){
            onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, initial:{ points:P.map(cp), closed:!!opts.initial?.closed&&P.length>=3 } };
   map.classList.add("drawing"); renderDraw(); return true;
 }
-function selChanged(){ const d=V.draw; if(!d) return; renderDraw(); d.onChange?.(shapeOf(d)); }
+function selChanged(){ const d=V.draw; if(!d) return; renderDraw(); previewDraw(); d.onChange?.(shapeOf(d)); }
 function selSelect(i){ const d=V.draw; if(!d) return; d.moving=false; d.sel=d.sel===i?null:i; renderDraw(); }
 function selMove(i){ const d=V.draw; if(!d) return; d.sel=i; d.moving=true; renderDraw(); }
 function selRemove(i){ const d=V.draw; if(!d) return; d.pts.splice(i,1); if(d.pts.length<3) d.closed=false; d.sel=null; d.moving=false; selChanged(); }
@@ -1429,6 +1457,18 @@ function selCancel(){ const d=V.draw; if(!d) return; clearDraw(); resetMode(); d
 function ringTemplate(active){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 96 44"); s.setAttribute("width","96"); s.setAttribute("height","44");
   s.innerHTML=`<circle cx="48" cy="22" r="13" fill="rgba(255,106,0,0.25)" stroke="#FF6A00" stroke-width="3"/><circle cx="48" cy="22" r="4" fill="#FF6A00"/><text x="48" y="26.5" text-anchor="middle" font-family="IBM Plex Mono,ui-monospace,Menlo,monospace" font-weight="700" font-size="11" fill="#0B0F1F">1</text>${active?`<rect x="10" y="0" width="76" height="14" rx="7" fill="#00FFE5"/><text x="48" y="10.5" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="9.5" fill="#0B0F1F">Create area ▾</text>`:""}`;
   const t=document.createElement("template"); t.content.append(s); return t; }
+/* Actions float above the latest (or selected) point as pills stacked in altitude, so they stay on the point at any heading;
+   spacing follows the camera range and tilt so the stack keeps roughly the same pixel gap. Rebuilt on every camera change. */
+const ACT_DEFS=[ ["done","Done ✓","#00FFE5","#0B0F1F"], ["move","Move","#FFFFFF","#0B0F1F"], ["delete","Delete","#FF3B2F","#FFFFFF"], ["undo","Undo","#3A4270","#FFFFFF"], ["cancel","✕ Cancel","#141B33","#FFFFFF"] ];
+function pillTemplate(text,bg,fg){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 80 28"); s.setAttribute("width","80"); s.setAttribute("height","28");
+  s.innerHTML=`<rect x="1" y="1" width="78" height="26" rx="13" fill="${bg}" stroke="#0B0F1F" stroke-width="1.5"/><text x="40" y="18.5" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="12" fill="${fg}">${text}</text>`;
+  const t=document.createElement("template"); t.content.append(s); return t; }
+function actStep(){ const r=map?.range||300, tilt=(map?.tilt||60)*Math.PI/180; return Math.max(0.6,Math.min(80,(r*0.034)/Math.max(0.35,Math.sin(tilt)))); }
+function renderActs(){ OV.act.forEach(x=>x.remove()); OV.act=[]; const d=V.draw; if(!d||!map||!d.pts.length||d.moving) return;
+  const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i]; const dm=surf([p]); const step=actStep();
+  const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&d.needClosed&&!d.closed));
+  defs.forEach(([key,label,bg,fg],j)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,2+step*(defs.length-j)), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true }); m.append(pillTemplate(label,bg,fg));
+    m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(key==="done") $("#draw-done").click(); else if(key==="move") selMove(i); else if(key==="delete") selRemove(i); else if(key==="cancel") $("#mode-exit").click(); else selUndo(); }); m.dataset&&(m.dataset.act=key); m.actKey=key; map.append(m); OV.act.push(m); }); }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
@@ -1445,11 +1485,12 @@ function renderDraw(){
   else if(d.closed) txt=`<b>${n}</b> corners → ${kindTxt}${d.live?" · saved":""} · Undo reopens the loop`;
   else if(canClose) txt=`<b>${n}</b> points → ${kindTxt}${d.live?" · saved":""} · ${verb.toLowerCase()} point ① to <b>create an area</b>, or keep adding`;
   else txt=`<b>${n}</b> point${n===1?"":"s"} → ${kindTxt}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add${d.needClosed?" (an area needs three, then close the loop)":""}`;
-  setMode("draw",d.label,txt,true);
+  setMode("draw",d.label,txt,true); document.body.classList.add("drawing");
   $("#sel-mv")?.addEventListener("click",()=>selMove(d.sel)); $("#sel-rm")?.addEventListener("click",()=>selRemove(d.sel));
   $("#draw-acts").hidden=false; $("#draw-done").disabled=n<1||(d.needClosed&&!d.closed); $("#draw-undo").disabled=!n&&!d.moving;
+  renderActs();
 }
-function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; V.draw=null; map?.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
+function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; OV.act.forEach(x=>x.remove()); OV.act=[]; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
 $("#draw-undo").onclick=selUndo;
 $("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(sh.kind==="none"||(d.needClosed&&!sh.closed)) return; clearDraw(); resetMode(); d.onDone(sh); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
@@ -1496,10 +1537,10 @@ function assetEditor(a,anchor,opts={}){
    Google's gesture controller has no "fixed pivot" mode, so in this view a transparent layer over the map takes the
    input itself: drag → heading/tilt, wheel/pinch → range, centre never changes. Lifted while placing or drawing points. */
 let LOCK=null, flying=false, flyT=null;
-function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync();
+function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); syncPhotoOverlays(); syncPinOverlays();
   // fly only after the map has its final size: an animation started on a hidden or resizing map is dropped by the engine
   if(map){ requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>flyWO(w), (isMobile()||wasHidden)?320:60))); } }
-function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
+function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
 function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Job",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
 function orbitSync(){ $("#orbit").hidden=true; }   // stock Google 3D gestures everywhere; no custom control layer
 function installLock(){ return;
@@ -1739,15 +1780,15 @@ async function savePoseCorrection(woId,p,patch){
 }
 
 /* ---------- photo icons on the model (V78) ---------- */
-function camSvg(fill){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 24 24"); s.setAttribute("width","22"); s.setAttribute("height","22"); s.innerHTML=`<circle cx="12" cy="12" r="11" fill="${fill}" stroke="#0B0F1F" stroke-width="1.5"/><path d="M7 9h2.2l1-1.6h3.6L14.8 9H17a1 1 0 011 1v6a1 1 0 01-1 1H7a1 1 0 01-1-1v-6a1 1 0 011-1z" fill="#0B0F1F"/><circle cx="12" cy="13" r="2.2" fill="${fill}"/>`; return s; }
+function camSvg(fill,scale=1){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 24 24"); s.setAttribute("width",String(Math.round(22*scale))); s.setAttribute("height",String(Math.round(22*scale))); s.innerHTML=`<circle cx="12" cy="12" r="11" fill="${fill}" stroke="#0B0F1F" stroke-width="1.5"/><path d="M7 9h2.2l1-1.6h3.6L14.8 9H17a1 1 0 011 1v6a1 1 0 01-1 1H7a1 1 0 01-1-1v-6a1 1 0 011-1z" fill="#0B0F1F"/><circle cx="12" cy="13" r="2.2" fill="${fill}"/>`; return s; }
 function syncPhotoOverlays(){
-  if(!map||!lib) return;
+  if(!map||!lib) return; if(!S.woView||!S.open){ clearPhotoOverlays(); return; }   // a job's photos and notes show only inside that job's view
   const want=new Set(PH.filter(hasPos).map(p=>p.id));
   Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].sight?.forEach(x=>x.remove()); delete PHOV[id]; } });
   PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e)+(PHOV[p.id]?.hl?"#":""); const o=PHOV[p.id]; if(o&&o.sig===sig) return; o?.m.remove(); o?.sight?.forEach(x=>x.remove());
-    const fill=o?.hl?"#FFFFFF":"#00FFE5";
+    const fill=o?.hl?"#00FFE5":"#B9C2DA";   // grey by default; teal when hovered or open
     // the icon sits on the surface the photo was placed on (roof, platform…), not on the ground under it
-    const m=new lib.Marker3DInteractiveElement({ position:{ lat:e.lat, lng:e.lng, altitude:e.ground!=null?e.ground+0.6:1.2 }, altitudeMode:e.ground!=null?"ABSOLUTE":"RELATIVE_TO_MESH", sizePreserved:true, drawsWhenOccluded:true }); m.append(tpl(camSvg(fill)));
+    const m=new lib.Marker3DInteractiveElement({ position:{ lat:e.lat, lng:e.lng, altitude:e.ground!=null?e.ground+0.6:1.2 }, altitudeMode:e.ground!=null?"ABSOLUTE":"RELATIVE_TO_MESH", sizePreserved:true, drawsWhenOccluded:true }); m.append(tpl(camSvg(fill,o?.hl?1.35:1)));
     m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); if(N("ph_"+p.id)) openNote("ph_"+p.id); else openViewer(p.id); }); map.append(m);
     PHOV[p.id]={ m, sight:[], sig, hl:o?.hl||false }; });   // heading is not drawn: phone compasses proved too unreliable on site
 }
@@ -1854,7 +1895,7 @@ function noteCardHTML(n,opts={}){
   const kids=childrenOf(n.id); const no=noteNo(n.id); const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const fc=(n.files||[]).length;
   let tile;
   if(n.kind==="model") tile=`<div class="nph pin">${pinTileSVG(no)}<span class="nshape">${NOTE_LABEL[noteShape(n)]}</span></div>`;
-  else if(n.kind==="photo") tile=`<div class="nph">${p?`<img src="${p.thumb}" alt="">`:`<div class="hint" style="padding:8px">photo…</div>`}${p?.marks?.length?`<span class="nshape">✎ ${p.marks.length}</span>`:""}</div>`;
+  else if(n.kind==="photo") tile=`<div class="nph">${p?`<img src="${p.thumb}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none">${(p.marks||[]).map(markSVG).join("")}</svg>`:`<div class="hint" style="padding:8px">photo…</div>`}${p?.marks?.length?`<span class="nshape">✎ ${p.marks.length}</span>`:""}</div>`;
   else if(n.kind==="file") tile=`<div class="nph pin"><span class="kico">${KIND_ICON.file}</span><span class="nshape">${fc} file${fc===1?"":"s"}</span></div>`;
   else tile=`<div class="nph pin"><span class="kico">${KIND_ICON.text}</span></div>`;
   return `<div class="note ncard" data-kind="${n.kind}" data-nid="${n.id}"><div class="ntile">${tile}<span class="nnum">${no}</span></div>
@@ -1871,8 +1912,9 @@ function wireNotes(){ const w=W(S.open); if(!w) return; wireNoteCommon(w.id);
 function wireNoteCommon(id){
   $$(".ncard").forEach(c=>{ c.onclick=e=>{ if(e.target.closest("textarea,button,a")) return; openNote(c.dataset.nid); };
     // hovering a card lights its shape (or photo icon) on the model; leaving restores it
-    const n=N(c.dataset.nid); if(n?.kind==="model"){ c.onmouseenter=()=>{ hoverPin=n.id; syncPinOverlays(); }; c.onmouseleave=()=>{ hoverPin=null; syncPinOverlays(); }; }
-    if(n?.kind==="photo"){ c.onmouseenter=()=>highlightPhoto(n.photoId); c.onmouseleave=()=>highlightPhoto(S.note?N(S.note)?.photoId:null); } });
+    const n=N(c.dataset.nid); if(!n) return;
+    c.onmouseenter=()=>{ hoverPin=n.id; syncPinOverlays(); highlightPhoto(n.kind==="photo"?n.photoId:null); };
+    c.onmouseleave=()=>{ hoverPin=null; syncPinOverlays(); highlightPhoto(S.note?N(S.note)?.photoId:null); }; });
   $("#nf-file")?.addEventListener("change",async e=>{ const files=[...e.target.files]; e.target.value=""; if(!files.length) return; const parent=pendingFileParent; pendingFileParent=null;
     for(const f of files){ const nid=await createNote(id,"file",parent,{ title:f.name }); if(nid) await addFileToNote(id,nid,f,$("#notes h3")); } }); }
 function renderNoteView(w){
@@ -1918,16 +1960,17 @@ function renderFiles(){ const el=$("#files"); if(!el||S.note) return; el.outerHT
 function wireFiles(){ $$("#files [data-gonote]").forEach(a=>a.onclick=e=>{ e.preventDefault(); openNote(a.dataset.gonote); }); }
 
 /* ---------- model-note overlays ---------- */
+function markSVG(m){ if(m.type==="point"){ const [x,y]=m.pts[0]; return `<circle cx="${x}" cy="${y}" r="0.045" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.016" text-anchor="middle" font-size="0.05" font-weight="700" fill="#0B0F1F">${m.n||""}</text>`; } return `<path d="M${m.pts.map(q=>q.join(",")).join(" L")}" fill="none" stroke="${m.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
 function pinTileSVG(no){ return `<svg viewBox="0 0 26 36" class="pintile"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="${PIN_NOTE_COLOR}" stroke="#0B0F1F" stroke-width="1.6"/><text x="13" y="16.6" text-anchor="middle" font-size="${String(no).length>1?"9":"10.5"}" font-weight="700" fill="#0B0F1F">${no}</text></svg>`; }
 function noteAnchor(k){ const P=notePts(k); if(P.length===1) return P[0]; const c=centroid(P); const g=P.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?g.reduce((a,b)=>a+b,0)/g.length:undefined }; }
 function clearPinOverlays(){ Object.values(PINOV).forEach(a=>a.forEach(x=>x.remove())); for(const k in PINOV) delete PINOV[k]; }
 function focusPinNote(id,nid){ openNote(nid); }
-function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open) return; const w=W(S.open); if(!w) return;
-  const openSet=S.note?new Set([S.note,...descendants(S.note).map(x=>x.id),...ancestors(S.note).map(x=>x.id)]):null;
-  NT.filter(n=>n.kind==="model"&&notePts(n).length).forEach(k=>{ const P=notePts(k); const parts=[]; const mode=surf(P); const lit=selPin===k.id||hoverPin===k.id; const dim=openSet&&!openSet.has(k.id)&&!lit;
-    const col=lit?"#FFFFFF":PIN_NOTE_COLOR; const rgbc=lit?"255,255,255":"255,212,0"; const a=dim?0.35:1;
+function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woView) return; const w=W(S.open); if(!w) return;
+  const focus=hoverPin||S.note; const openSet=focus?new Set([focus,...descendants(focus).map(x=>x.id),...ancestors(focus).map(x=>x.id)]):null;
+  NT.filter(n=>n.kind==="model"&&notePts(n).length).forEach(k=>{ const P=notePts(k); const parts=[]; const mode=surf(P); const lit=hoverPin?hoverPin===k.id:(selPin===k.id||S.note===k.id); const dim=openSet&&!openSet.has(k.id)&&!lit;
+    const col=lit?"#00FFE5":dim?"#8A93AD":PIN_NOTE_COLOR; const rgbc=lit?"0,255,229":dim?"138,147,173":"255,212,0"; const a=dim?0.55:1;
     const anc=noteAnchor(k); const m=new lib.Marker3DInteractiveElement({ position:atSurf(anc,P.length===1?0.6:1.2), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true });
-    const tp=pinTemplate(col,dim?0.75:0.95,undefined,noteNo(k.id)); if(dim) tp.tpl.content.firstChild?.setAttribute?.("opacity","0.45"); m.append(tp.tpl); m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); openNote(k.id); }); map.append(m); parts.push(m);
+    const tp=pinTemplate(col,lit?1.25:dim?0.75:0.95,undefined,noteNo(k.id)); if(dim) tp.tpl.content.firstChild?.setAttribute?.("opacity","0.45"); m.append(tp.tpl); m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); openNote(k.id); }); map.append(m); parts.push(m);
     const sh=noteShape(k);
     if(sh==="line"&&P.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:5, drawsOccludedSegments:true }); l.path=P.map(p=>atSurf(p,0.8)); map.append(l); parts.push(l); }
     if(sh==="area"&&P.length>=3){ const g=new lib.Polygon3DElement({ altitudeMode:mode, fillColor:`rgba(${rgbc},${0.25*a})`, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:3, drawsOccludedSegments:true }); g.path=[...P,P[0]].map(p=>atSurf(p,0.8)); g.addEventListener?.("gmp-click",ev=>{ if(V.draw||V.placing) return; openNote(k.id); }); map.append(g); parts.push(g); }
