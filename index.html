@@ -121,7 +121,7 @@ gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 #view-wo{display:flex;flex-direction:column;background:var(--ground);transition:margin-right .2s ease}
 #act-box{position:absolute;z-index:6;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:12px;background:rgba(11,15,31,.82);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
 #act-box button{font:600 13px/1 var(--sans,system-ui);padding:9px 14px;border-radius:999px;border:1px solid rgba(11,15,31,.6);cursor:pointer;min-width:104px}
-#act-box .act-done{background:#00FFE5;color:#0B0F1F}#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-undo{background:#3A4270;color:#fff}#act-box .act-cancel{background:#141B33;color:#fff;border-color:rgba(255,255,255,.25)}
+#act-box .act-done{background:#00FFE5;color:#0B0F1F}#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-undo{background:#3A4270;color:#fff}
 @media (max-width:860px){ #act-box button{min-height:44px;min-width:120px;font-size:14px} }
 #draw-preview{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;display:none}
 /* while the 3D selector is active the mode banner hides; the actions ride on the model instead */
@@ -1359,13 +1359,17 @@ function previewInit(){ if(!map||PV.svg||!matchMedia("(pointer:fine)").matches) 
   wrap.addEventListener("mousemove",e=>{ const r=map.getBoundingClientRect(); PV.mouse={ x:e.clientX-r.left, y:e.clientY-r.top }; previewDraw(); });
   wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; previewDraw(); });
   ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,previewDraw)); }
-function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&!d.closed&&PV.mouse&&!PV.overBox); s.style.display=show?"block":"none"; if(!show) return;
+function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&PV.mouse&&!PV.overBox&&(!d.closed||d.moving)); s.style.display=show?"block":"none"; if(!show) return;
   const pin=s.querySelector("#pv-pin"); pin.setAttribute("transform",`translate(${PV.mouse.x-13*0.9},${PV.mouse.y-36*0.9}) scale(0.9)`);
-  const line=s.querySelector("#pv-line"); const last=d.pts.length?d.pts[d.moving&&d.sel!=null?Math.max(0,d.sel-1):d.pts.length-1]:null; const from=last&&PV.err<0.34?projectLL({ lat:last.lat, lng:last.lng, altitude:(last.ground??0)+0.8 }):null;
-  const len=s.querySelector("#pv-len");
-  if(from&&d.pts.length&&!d.moving){ line.style.display="block"; line.setAttribute("x1",from.x); line.setAttribute("y1",from.y); line.setAttribute("x2",PV.mouse.x); line.setAttribute("y2",PV.mouse.y);
-    const q=unprojectToPlane(PV.mouse.x,PV.mouse.y,last.ground??0); if(q){ len.style.display="block"; len.setAttribute("transform",`translate(${(from.x+PV.mouse.x)/2},${(from.y+PV.mouse.y)/2-14})`); len.querySelector("text").textContent="≈ "+fmtDist(dist3(last,q)); } else len.style.display="none"; }
-  else { line.style.display="none"; len.style.display="none"; } }
+  const line=s.querySelector("#pv-line"), len=s.querySelector("#pv-len"); let extra=s.querySelector("#pv-extra"); if(!extra){ extra=document.createElementNS("http://www.w3.org/2000/svg","g"); extra.id="pv-extra"; s.append(extra); } extra.innerHTML="";
+  const anchors=[]; const n=d.pts.length;
+  if(d.moving&&d.sel!=null){ const i=d.sel; if(n>=2){ if(i>0) anchors.push(d.pts[i-1]); else if(d.closed) anchors.push(d.pts[n-1]); if(i<n-1) anchors.push(d.pts[i+1]); else if(d.closed) anchors.push(d.pts[0]); } }
+  else if(n&&!d.closed) anchors.push(d.pts[n-1]);
+  line.style.display="none"; len.style.display="none";
+  if(PV.err>=0.34||!anchors.length) return;
+  anchors.forEach((p,k)=>{ const from=projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }); if(!from) return;
+    const q=unprojectToPlane(PV.mouse.x,PV.mouse.y,p.ground??0); const txt=q?"≈ "+fmtDist(dist3(p,q)):"";
+    const g=document.createElementNS("http://www.w3.org/2000/svg","g"); g.innerHTML=`<line x1="${from.x}" y1="${from.y}" x2="${PV.mouse.x}" y2="${PV.mouse.y}" stroke="#FF6A00" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/>${txt?`<g transform="translate(${(from.x+PV.mouse.x)/2},${(from.y+PV.mouse.y)/2-14})"><rect x="-28" y="-11" width="56" height="22" rx="11" fill="rgba(11,15,31,0.6)" stroke="#FF6A00" stroke-dasharray="3 3"/><text y="4" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="11" fill="#fff">${txt}</text></g>`:""}`; extra.append(g); }); }
 function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.lat, lng:p.lng, altitude:p.ground }); if(!s) return; const H=map.clientHeight||1; const err=Math.hypot(s.x-PV.mouse.x,s.y-PV.mouse.y)/H; PV.err=PV.err?PV.err*0.5+err*0.5:err; if(PARAMS.has("debug")) console.log("preview projection error",(err*100).toFixed(1)+"% of viewport"); }
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
@@ -1475,7 +1479,7 @@ function ringTemplate(active){ const NS="http://www.w3.org/2000/svg", s=document
 /* The actions for the latest (or selected) point sit in one HTML box anchored to that point on screen (projected with the
    same camera model as the preview). Being HTML, the box swallows its own clicks — the map never sees them — and while the
    pointer is inside it, placing is paused and the preview hides. Re-anchored on every camera change. */
-const ACT_DEFS=[ ["done","Done ✓","act-done"], ["move","Move","act-move"], ["delete","Delete","act-del"], ["undo","Undo","act-undo"], ["cancel","✕ Cancel","act-cancel"] ];
+const ACT_DEFS=[ ["done","Done ✓","act-done"], ["move","Move","act-move"], ["delete","Delete","act-del"], ["undo","Undo","act-undo"] ];
 let ACTBOX=null;
 function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap) return; const box=document.createElement("div"); box.id="act-box"; box.hidden=true; wrap.append(box); ACTBOX=box;
   box.addEventListener("pointerenter",()=>{ PV.overBox=true; if(PV.svg) PV.svg.style.display="none"; }); box.addEventListener("pointerleave",()=>{ PV.overBox=false; previewDraw(); });
@@ -1485,7 +1489,7 @@ function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap
 function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) return; if(!d||!d.pts.length||d.moving){ box.hidden=true; PV.overBox=false; return; }
   const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&d.needClosed&&!d.closed));
   box.innerHTML=defs.map(([k,l,cls])=>`<button type="button" class="${cls}" data-act="${k}">${l}</button>`).join(""); box.hidden=false; placeActBox(); }
-function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
+function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length||PV.overBox) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
   const s=(PV.err<0.34)?projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }):null; const bw=box.offsetWidth||120, bh=box.offsetHeight||44;
   let x=s?s.x-bw/2:W-bw-16, y=s?s.y-bh-46:16; x=Math.max(8,Math.min(W-bw-8,x)); y=Math.max(8,Math.min(H-bh-8,y)); box.style.left=x+"px"; box.style.top=y+"px"; }
 /* Segment lengths: a pill at the midpoint of every segment (3D length — the height difference between the ends counts).
@@ -1502,12 +1506,17 @@ function segmentLabels(P,closed){ const out=[]; if(!map||!lib||P.length<2) retur
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
+  const movingI=d.moving&&d.sel!=null?d.sel:-1;
   d.pts.forEach((p,i)=>{ const first=i===0&&!d.closed&&n>1; const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,first?0.2:0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
-    m.append(first?ringTemplate(canClose):pinTemplate(d.sel===i?"#00FFE5":"#FF6A00",0.9,undefined,i+1).tpl);
+    m.append(first?ringTemplate(canClose):pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":"#FF6A00",i===movingI?0.7:0.9,undefined,i+1).tpl);
     m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; if(first&&canClose){ selClose(); return; } selSelect(i); }); map.append(m); OV.draw.push(m); });
-  if(n>=2){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.closed?[d.pts[0]]:[])].map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
+  const ring=[...d.pts,...(d.closed?[d.pts[0]]:[])];
+  if(n>=2&&movingI<0){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=ring.map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
+  if(n>=2&&movingI>=0){ // the moving point's own segments are left out; the preview supplies them
+    const runs=[]; let cur=[]; ring.forEach((p,idx)=>{ const isMoving=p===d.pts[movingI]; if(isMoving){ if(cur.length>=2) runs.push(cur); cur=[]; } else cur.push(p); }); if(cur.length>=2) runs.push(cur);
+    runs.forEach(r=>{ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=r.map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }); }
   if(d.closed&&n>=3){ const g=new lib.Polygon3DElement({ altitudeMode:dm, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5, drawsOccludedSegments:true }); g.path=[...d.pts,d.pts[0]].map(p=>atSurf(p,0.8)); map.append(g); OV.draw.push(g); }
-  OV.draw.push(...segmentLabels(d.pts,d.closed));
+  if(movingI<0) OV.draw.push(...segmentLabels(d.pts,d.closed)); else { const rest=d.pts.filter((_,i)=>i!==movingI); /* labels only on segments not touching the moving point */ const segs=[]; for(let i=0;i<d.pts.length-1+(d.closed?1:0);i++){ const a=i, c=(i+1)%d.pts.length; if(a!==movingI&&c!==movingI) segs.push([d.pts[a],d.pts[c]]); } segs.forEach(([a,c])=>OV.draw.push(...segmentLabels([a,c],false))); }
   const verb=isMobile()?"Tap":"Click", kindTxt={ none:"nothing yet", point:"a point", line:"a line", area:"an area" }[sh];
   let txt;
   if(d.moving&&d.sel!=null) txt=`${verb} the model where point <b>${d.sel+1}</b> should be.`;
