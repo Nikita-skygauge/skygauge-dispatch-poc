@@ -1411,9 +1411,11 @@ function addWOOverlay(w){
   if(kind==="area"){ o.area=new lib.Polygon3DElement({ altitudeMode:mode, drawsOccludedSegments:true, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>atSurf(p,0.8)); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; enterWOView(w.id); }); map.append(o.area);
     // height, when set, rises from the lowest corner's surface — an area on a roof grows from the roof
     if(h>0){ const g0=minGround(P); o.box=new lib.Polygon3DElement({ altitudeMode:"ABSOLUTE", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.18)`, strokeColor:`rgba(${rgb(c)},0.8)`, strokeWidth:1.5 }); o.box.path=[...P,P[0]].map(p=>({ lat:p.lat, lng:p.lng, altitude:g0+h })); map.append(o.box); } }
-  if(kind!=="point") o.labels=segmentLabels(P,kind==="area");
+  if(kind!=="point"&&S.woView&&S.open===w.id) o.labels=segmentLabels(P,kind==="area");   // lengths only while this job is open
   OV.wo[w.id]=o; applyLegendTo(w);
 }
+/* segment lengths belong to the open job only: strip them from every other job, add them to the open one */
+function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const on=S.woView&&S.open===id; if(!on&&o.labels?.length){ o.labels.forEach(x=>x.remove()); o.labels=[]; } if(on&&!(o.labels?.length)){ const w=W(id); if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
@@ -1577,10 +1579,10 @@ function assetEditor(a,anchor,opts={}){
    Google's gesture controller has no "fixed pivot" mode, so in this view a transparent layer over the map takes the
    input itself: drag → heading/tilt, wheel/pinch → range, centre never changes. Lifted while placing or drawing points. */
 let LOCK=null, flying=false, flyT=null;
-function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); syncPhotoOverlays(); syncPinOverlays();
+function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); syncPhotoOverlays(); syncPinOverlays(); syncJobLabels();
   // fly only after the map has its final size: an animation started on a hidden or resizing map is dropped by the engine
   if(map){ requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>flyWO(w), (isMobile()||wasHidden)?320:60))); } }
-function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
+function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); syncJobLabels(); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
 function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Job",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
 function orbitSync(){ $("#orbit").hidden=true; }   // stock Google 3D gestures everywhere; no custom control layer
 function installLock(){ return;
@@ -2014,7 +2016,7 @@ function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woVie
     const sh=noteShape(k);
     if(sh==="line"&&P.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:5, drawsOccludedSegments:true }); l.path=P.map(p=>atSurf(p,0.8)); map.append(l); parts.push(l); }
     if(sh==="area"&&P.length>=3){ const g=new lib.Polygon3DElement({ altitudeMode:mode, fillColor:`rgba(${rgbc},${0.25*a})`, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:3, drawsOccludedSegments:true }); g.path=[...P,P[0]].map(p=>atSurf(p,0.8)); g.addEventListener?.("gmp-click",ev=>{ if(V.draw||V.placing) return; openNote(k.id); }); map.append(g); parts.push(g); }
-    if(!dim&&(sh==="line"||sh==="area")) parts.push(...segmentLabels(P,sh==="area"));
+    if(S.note===k.id&&(sh==="line"||sh==="area")) parts.push(...segmentLabels(P,sh==="area"));   // lengths only inside this note's view
     PINOV[k.id]=parts; }); }
 
 boot();
