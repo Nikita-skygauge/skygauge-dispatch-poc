@@ -754,7 +754,7 @@ function flashSaved(el,run){   // run: a function that starts the write — the 
 }
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
-async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m?.remove(); o.area?.remove(); o.line?.remove(); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
+async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
 function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); const dcut=Date.now()-86400000; S.wos.filter(w=>w.draft&&S.creating!==w.id&&w.createdBy?.uid===S.user.uid&&new Date(w.created)<dcut).forEach(w=>purgeWO(w.id)); }
 async function duplicateWO(id){ const w=W(id); if(!w) return; const nid=await createWO({ title:(w.title||"Untitled")+" (copy)", statusId:w.statusId, values:structuredClone(w.values||{}), location:structuredClone(w.location) }); openWO(nid); }
 async function saveSchema(){ S.schema.version=(S.schema.version||1); await DB.set("workspace/schema",S.schema); renderAll(); }
@@ -1348,19 +1348,29 @@ function projectLL(q){ if(!map||!map.center) return null; const el=map; const W=
   const Q=enu(q); const v=[ Q[0]-P[0], Q[1]-P[1], Q[2]-P[2] ]; const z=v[0]*f[0]+v[1]*f[1]+v[2]*f[2]; if(z<=1) return null;
   const x=v[0]*rt[0]+v[1]*rt[1]+v[2]*rt[2], y=v[0]*u[0]+v[1]*u[1]+v[2]*u[2]; const focal=(H/2)/Math.tan(fov/2);
   return { x:W/2+x*focal/z, y:H/2-y*focal/z }; }
-function previewInit(){ if(!map||PV.svg||!matchMedia("(pointer:fine)").matches) return; const wrap=$("#canvas-wrap"); const s=document.createElementNS("http://www.w3.org/2000/svg","svg"); s.id="draw-preview"; s.innerHTML=`<line id="pv-line" stroke="#FF6A00" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/><g id="pv-pin" opacity="0.55"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="#FF6A00" stroke="#0B0F1F" stroke-width="1.6"/><circle cx="13" cy="13" r="4.2" fill="#0B0F1F"/></g>`; wrap.append(s); PV.svg=s;
+function unprojectToPlane(sx,sy,zPlane){ if(!map||!map.center) return null; const W=map.clientWidth, H=map.clientHeight; if(!W||!H) return null;
+  const C=map.center, lat0=C.lat*Math.PI/180; const h=(map.heading||0)*Math.PI/180, t=(map.tilt||0)*Math.PI/180, r=map.range||300, fov=((map.fov||35)*Math.PI/180);
+  const P=[ -Math.sin(h)*Math.sin(t)*r, -Math.cos(h)*Math.sin(t)*r, Math.cos(t)*r ]; const f=[ -P[0]/r, -P[1]/r, -P[2]/r ];
+  let rt=[ f[1], -f[0], 0 ]; const rl=Math.hypot(...rt)||1; rt=rt.map(x=>x/rl); const u=[ rt[1]*f[2]-rt[2]*f[1], rt[2]*f[0]-rt[0]*f[2], rt[0]*f[1]-rt[1]*f[0] ];
+  const focal=(H/2)/Math.tan(fov/2); const dx=(sx-W/2)/focal, dy=(H/2-sy)/focal; const dir=[ f[0]+rt[0]*dx+u[0]*dy, f[1]+rt[1]*dx+u[1]*dy, f[2]+rt[2]*dx+u[2]*dy ];
+  const z0=zPlane-(C.altitude||0); if(Math.abs(dir[2])<1e-6) return null; const s=(z0-P[2])/dir[2]; if(s<=0) return null; const e=P[0]+dir[0]*s, n=P[1]+dir[1]*s;
+  return { lat:C.lat+n/111320, lng:C.lng+e/(111320*Math.cos(lat0)), ground:zPlane }; }
+function previewInit(){ if(!map||PV.svg||!matchMedia("(pointer:fine)").matches) return; const wrap=$("#canvas-wrap"); const s=document.createElementNS("http://www.w3.org/2000/svg","svg"); s.id="draw-preview"; s.innerHTML=`<line id="pv-line" stroke="#FF6A00" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/><g id="pv-len"><rect x="-28" y="-11" width="56" height="22" rx="11" fill="rgba(11,15,31,0.6)" stroke="#FF6A00" stroke-dasharray="3 3"/><text y="4" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="11" fill="#fff"></text></g><g id="pv-pin" opacity="0.55"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="#FF6A00" stroke="#0B0F1F" stroke-width="1.6"/><circle cx="13" cy="13" r="4.2" fill="#0B0F1F"/></g>`; wrap.append(s); PV.svg=s;
   wrap.addEventListener("mousemove",e=>{ const r=map.getBoundingClientRect(); PV.mouse={ x:e.clientX-r.left, y:e.clientY-r.top }; previewDraw(); });
   wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; previewDraw(); });
   ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,previewDraw)); }
 function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&!d.closed&&PV.mouse&&!PV.overBox); s.style.display=show?"block":"none"; if(!show) return;
   const pin=s.querySelector("#pv-pin"); pin.setAttribute("transform",`translate(${PV.mouse.x-13*0.9},${PV.mouse.y-36*0.9}) scale(0.9)`);
   const line=s.querySelector("#pv-line"); const last=d.pts.length?d.pts[d.moving&&d.sel!=null?Math.max(0,d.sel-1):d.pts.length-1]:null; const from=last&&PV.err<0.34?projectLL({ lat:last.lat, lng:last.lng, altitude:(last.ground??0)+0.8 }):null;
-  if(from&&d.pts.length&&!d.moving){ line.style.display="block"; line.setAttribute("x1",from.x); line.setAttribute("y1",from.y); line.setAttribute("x2",PV.mouse.x); line.setAttribute("y2",PV.mouse.y); } else line.style.display="none"; }
+  const len=s.querySelector("#pv-len");
+  if(from&&d.pts.length&&!d.moving){ line.style.display="block"; line.setAttribute("x1",from.x); line.setAttribute("y1",from.y); line.setAttribute("x2",PV.mouse.x); line.setAttribute("y2",PV.mouse.y);
+    const q=unprojectToPlane(PV.mouse.x,PV.mouse.y,last.ground??0); if(q){ len.style.display="block"; len.setAttribute("transform",`translate(${(from.x+PV.mouse.x)/2},${(from.y+PV.mouse.y)/2-14})`); len.querySelector("text").textContent="≈ "+fmtDist(dist3(last,q)); } else len.style.display="none"; }
+  else { line.style.display="none"; len.style.display="none"; } }
 function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.lat, lng:p.lng, altitude:p.ground }); if(!s) return; const H=map.clientHeight||1; const err=Math.hypot(s.x-PV.mouse.x,s.y-PV.mouse.y)/H; PV.err=PV.err?PV.err*0.5+err*0.5:err; if(PARAMS.has("debug")) console.log("preview projection error",(err*100).toFixed(1)+"% of viewport"); }
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
   if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); $("#mapgate").hidden=true; $("#loading").hidden=true;
-    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act) };
+    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
     requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); }); return; }
   const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
@@ -1380,7 +1390,7 @@ function drawSite(){ if(!map) return; OV.site?.remove(); const B=BOUNDARY(); con
 function syncAssetOverlays(){ /* assets carry no location (register only) */ }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
 function woColor(w){ return col(status(w.statusId)?.color).map; }
-function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); OV.wo[id].box?.remove(); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
+function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); OV.wo[id].box?.remove(); (OV.wo[id].labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
 /* Points stay where they were clicked on the model (roof, platform, shell) instead of dropping to the ground: each point
    stores the surface altitude `ground` from the click, and overlays use ABSOLUTE altitude from it. Legacy points without
    it fall back to RELATIVE_TO_MESH, which also sits on the surface. */
@@ -1388,7 +1398,7 @@ function surf(P){ return P.every(p=>p.ground!=null)?"ABSOLUTE":"RELATIVE_TO_MESH
 function atSurf(p,lift){ return { lat:p.lat, lng:p.lng, altitude:(p.ground!=null?p.ground:0)+lift }; }
 function addWOOverlay(w){
   const P=pts(w); if(!P.length||w.draft) return;
-  const o={ sig:JSON.stringify(w.location||{}), m:null, pin:null, area:null, line:null, box:null };
+  const o={ sig:JSON.stringify(w.location||{}), m:null, pin:null, area:null, line:null, box:null, labels:[] };
   const c=woColor(w); const a=locAnchor(w); const h=locHeight(w); const kind=locKindW(w); const mode=surf(P);
   const topLift=kind==="point"?(a.alt||0)+0.3:kind==="line"?2:(h>0?h+1:1.5);
   o.m=new lib.Marker3DInteractiveElement({ position:atSurf(kind==="area"?{ ...a, ground:minGround(P) }:a,topLift), altitudeMode:mode, extruded:kind==="point", sizePreserved:true, drawsWhenOccluded:true });
@@ -1397,11 +1407,12 @@ function addWOOverlay(w){
   if(kind==="area"){ o.area=new lib.Polygon3DElement({ altitudeMode:mode, drawsOccludedSegments:true, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>atSurf(p,0.8)); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; enterWOView(w.id); }); map.append(o.area);
     // height, when set, rises from the lowest corner's surface — an area on a roof grows from the roof
     if(h>0){ const g0=minGround(P); o.box=new lib.Polygon3DElement({ altitudeMode:"ABSOLUTE", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.18)`, strokeColor:`rgba(${rgb(c)},0.8)`, strokeWidth:1.5 }); o.box.path=[...P,P[0]].map(p=>({ lat:p.lat, lng:p.lng, altitude:g0+h })); map.append(o.box); } }
+  if(kind!=="point") o.labels=segmentLabels(P,kind==="area");
   OV.wo[w.id]=o; applyLegendTo(w);
 }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
-function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
-function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } }
+function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
+function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
 let flyTok=0; function onFlyEnd(fn){ const tok=++flyTok; const h=()=>{ map.removeEventListener("gmp-animationend",h); if(tok===flyTok) fn(); }; map.addEventListener("gmp-animationend",h); }
@@ -1477,6 +1488,17 @@ function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) 
 function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
   const s=(PV.err<0.34)?projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }):null; const bw=box.offsetWidth||120, bh=box.offsetHeight||44;
   let x=s?s.x-bw/2:W-bw-16, y=s?s.y-bh-46:16; x=Math.max(8,Math.min(W-bw-8,x)); y=Math.max(8,Math.min(H-bh-8,y)); box.style.left=x+"px"; box.style.top=y+"px"; }
+/* Segment lengths: a pill at the midpoint of every segment (3D length — the height difference between the ends counts).
+   Part of the 3D selector's standard set; also drawn on saved job areas and model notes. */
+function dist3(a,b){ const lat0=(a.lat+b.lat)/2*Math.PI/180; const dx=(b.lng-a.lng)*111320*Math.cos(lat0), dy=(b.lat-a.lat)*111320, dz=(b.ground??0)-(a.ground??0); return Math.hypot(dx,dy,dz); }
+function fmtDist(m){ return m<100?m.toFixed(1)+" m":Math.round(m)+" m"; }
+function distLabelTemplate(text,muted){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); const w=Math.max(44,text.length*7+16); s.setAttribute("viewBox",`0 0 ${w} 22`); s.setAttribute("width",String(w)); s.setAttribute("height","22");
+  s.innerHTML=`<rect x="0.5" y="0.5" width="${w-1}" height="21" rx="10.5" fill="rgba(11,15,31,${muted?0.55:0.85})" stroke="${muted?"#FF6A00":"rgba(255,255,255,0.25)"}" stroke-width="1" ${muted?'stroke-dasharray="3 3"':""}/><text x="${w/2}" y="15" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="11" fill="#fff">${text}</text>`;
+  const t=document.createElement("template"); t.content.append(s); return t; }
+function segmentLabels(P,closed){ const out=[]; if(!map||!lib||P.length<2) return out; const mode=surf(P); const n=P.length; const segs=n-1+(closed&&n>=3?1:0);
+  for(let i=0;i<segs;i++){ const a=P[i], c=P[(i+1)%n]; const mid={ lat:(a.lat+c.lat)/2, lng:(a.lng+c.lng)/2, ground:a.ground!=null&&c.ground!=null?(a.ground+c.ground)/2:undefined };
+    const m=new lib.Marker3DElement({ position:atSurf(mid,1.6), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); m.append(distLabelTemplate(fmtDist(dist3(a,c)))); map.append(m); out.push(m); }
+  return out; }
 function renderDraw(){
   const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
@@ -1485,6 +1507,7 @@ function renderDraw(){
     m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; if(first&&canClose){ selClose(); return; } selSelect(i); }); map.append(m); OV.draw.push(m); });
   if(n>=2){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=[...d.pts,...(d.closed?[d.pts[0]]:[])].map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
   if(d.closed&&n>=3){ const g=new lib.Polygon3DElement({ altitudeMode:dm, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5, drawsOccludedSegments:true }); g.path=[...d.pts,d.pts[0]].map(p=>atSurf(p,0.8)); map.append(g); OV.draw.push(g); }
+  OV.draw.push(...segmentLabels(d.pts,d.closed));
   const verb=isMobile()?"Tap":"Click", kindTxt={ none:"nothing yet", point:"a point", line:"a line", area:"an area" }[sh];
   let txt;
   if(d.moving&&d.sel!=null) txt=`${verb} the model where point <b>${d.sel+1}</b> should be.`;
@@ -1982,6 +2005,7 @@ function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woVie
     const sh=noteShape(k);
     if(sh==="line"&&P.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:5, drawsOccludedSegments:true }); l.path=P.map(p=>atSurf(p,0.8)); map.append(l); parts.push(l); }
     if(sh==="area"&&P.length>=3){ const g=new lib.Polygon3DElement({ altitudeMode:mode, fillColor:`rgba(${rgbc},${0.25*a})`, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:3, drawsOccludedSegments:true }); g.path=[...P,P[0]].map(p=>atSurf(p,0.8)); g.addEventListener?.("gmp-click",ev=>{ if(V.draw||V.placing) return; openNote(k.id); }); map.append(g); parts.push(g); }
+    if(!dim&&(sh==="line"||sh==="area")) parts.push(...segmentLabels(P,sh==="area"));
     PINOV[k.id]=parts; }); }
 
 boot();
