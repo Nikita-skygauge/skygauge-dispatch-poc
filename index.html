@@ -2103,7 +2103,9 @@ function noteAnchor(k){ const P=notePts(k); if(P.length===1) return P[0]; const 
 function clearPinOverlays(){ const n=Object.keys(PINOV).length; Object.values(PINOV).forEach(a=>a.forEach(x=>x.remove())); for(const k in PINOV) delete PINOV[k]; if(n) mapRedraw(); }
 function focusPinNote(id,nid){ openNote(nid); }
 function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woView) return; const w=W(S.open); if(!w) return;
-  const focus=hoverPin||S.note; const openSet=focus?new Set([focus,...descendants(focus).map(x=>x.id),...ancestors(focus).map(x=>x.id)]):null;
+  /* hover: only the hovered note stays lit, everything else (parents included) greys. Inside a note view without a hover: the
+     open note plus its ancestors and descendants stay visible for context, the rest greys. */
+  const openSet=hoverPin?new Set([hoverPin]):S.note?new Set([S.note,...descendants(S.note).map(x=>x.id),...ancestors(S.note).map(x=>x.id)]):null;
   NT.filter(n=>n.kind==="model"&&notePts(n).length&&V.draw?.noteId!==n.id).forEach(k=>{ const P=notePts(k); const parts=[]; const mode=surf(P); const lit=hoverPin?hoverPin===k.id:(selPin===k.id||S.note===k.id); const dim=openSet&&!openSet.has(k.id)&&!lit;
     const col=lit?"#00FFE5":dim?"#8A93AD":PIN_NOTE_COLOR; const rgbc=lit?"0,255,229":dim?"138,147,173":"255,212,0"; const a=dim?0.55:1;
     const anc=noteAnchor(k); const m=new lib.Marker3DInteractiveElement({ position:atSurf(anc,P.length===1?0.6:1.2), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true });
