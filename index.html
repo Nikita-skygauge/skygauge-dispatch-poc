@@ -146,6 +146,18 @@ body.drawing #mode{display:none!important}
 .nvmarks .mk{background:var(--panel-2)}.nvmarks .note{background:transparent;color:var(--ink);border-color:var(--line)}
 .files{display:flex;flex-direction:column;gap:4px}.frow{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--panel-2);font-size:12.5px;min-width:0}.frow .fname{color:var(--ink);font-weight:600;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.frow .hint{margin-left:auto;white-space:nowrap}.frow .fico{font-size:16px}
 body.note-view #pk-fly{display:none}
+/* record: title row, chips, meta, strips */
+.trow{display:flex;align-items:flex-start;gap:10px}.trow .ptitle{flex:1;min-width:0}.trow .pv[data-status]{margin-top:8px;flex:none}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 6px}.chip.pv{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:999px;background:var(--panel-2,#1F2A52);cursor:pointer;min-height:0}.chip.pv:hover{background:var(--line)}.chip.soft{display:inline-flex;align-items:center;padding:4px 10px;border-radius:999px;background:#1F2A52;color:#C9D4FF;font-size:12px;font-weight:500;white-space:nowrap}
+.metaline{color:var(--ink-3);font-size:12px;margin:0 0 12px}
+.strip{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2,#172044);margin:8px 0}.strip .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;min-width:64px}.strip .val{flex:1;color:var(--ink-2)}
+.props.details{margin-top:4px;margin-bottom:8px}
+/* note view: teal frame + context band; the map pill mirrors it */
+body.note-view #peek{box-shadow:inset 0 0 0 2px #00FFE5} body.note-view #pk-exit{display:none!important}
+.nview .ctx{display:flex;align-items:center;gap:10px;padding:8px 12px;margin:-4px -4px 10px;background:rgba(0,255,229,.12);border:1px solid rgba(0,255,229,.35);border-radius:10px;font-size:12px}
+.nview .ctx .tag{font:700 10px/1 var(--sans,system-ui);letter-spacing:.08em;text-transform:uppercase;background:#00FFE5;color:#0B0F1F;padding:4px 7px;border-radius:5px}
+.nview .ctx .crumbs{flex:1;margin:0}.nview .ctx .lvl{display:inline-flex;gap:3px}.nview .ctx .lvl s{width:6px;height:6px;border-radius:50%;background:#2A3358;display:block;text-decoration:none}.nview .ctx .lvl s.on{background:#00FFE5}
+#mode.note{border-color:#00FFE5;box-shadow:0 0 0 1px #00FFE5}#mode.note .mode-tag{background:#00FFE5;color:#0B0F1F}#mode.note #mode-back{margin-left:6px}
 @media (max-width:860px){ .frow{flex-wrap:wrap} .frow .hint{margin-left:0;width:100%} }
 /* the job panel docks: the board and table shrink to the remaining width instead of being covered */
 @media (min-width:861px){ body.peek-open[data-tab="wo"] #view-wo{margin-right:min(560px,100%)} }
@@ -1053,7 +1065,7 @@ function statusOptionEditor(oid,anchor,after){
 /* =====================================================================
    RECORD PAGE (side peek)
    ===================================================================== */
-let actUnsub=null, ACT=[], showEmpty=false, showAct=false, selPt=null;
+let actUnsub=null, ACT=[], showEmpty=false, showAct=false, selPt=null, showDetails=false;
 function openWO(id,fly){
   const w=W(id); if(!w) return;
   if(S.creating&&S.creating!==id){ cancelCreate(); }   // opening another record abandons the unfinished draft
@@ -1075,43 +1087,43 @@ function renderRecord(){
   const filled=props().filter(p=>p.system||!isEmpty(w.values?.[p.id])), empty=props().filter(p=>!p.system&&isEmpty(w.values?.[p.id]));
   const rowHTML=p=>`<div class="prop" data-pid="${p.id}" draggable="true"><div class="pn" title="${P(p.name)} · ${TYPE_LABEL[p.type]}">${ico(p.type)}<span style="overflow:hidden;text-overflow:ellipsis">${P(p.name)}</span></div><div class="pv ${p.system?"ro":""}" data-edit="${p.id}">${renderValue(p,w.values?.[p.id],w)}</div></div>`;
   const P0=pts(w);
+  const custom=filled.filter(p=>!p.system);
+  const areaTxt=P0.length?P(shapeLabel(locShape(w))+(locKindW(w)==="area"&&locHeight(w)>0?" · "+locHeight(w)+" m high":"")):"";
   $("#pbody").innerHTML=`
-    <textarea class="ptitle" id="ptitle" rows="1" placeholder="Untitled">${P(w.title||"")}</textarea>
-    <div class="props">
-      <div class="prop"><div class="pn">${ico("status")}Status</div><div class="pv" data-status>${statusPill(w)}</div></div>
+    <div class="trow"><textarea class="ptitle" id="ptitle" rows="1" placeholder="Untitled">${P(w.title||"")}</textarea><div class="pv" data-status>${statusPill(w)}</div></div>
+    ${custom.length?`<div class="chips">${custom.map(p=>`<div class="pv chip" data-edit="${p.id}" title="${P(p.name)}">${renderValue(p,w.values?.[p.id],w)}</div>`).join("")}</div>`:""}
+    <div class="metaline">${P(w.createdBy?.name||"")} · ${P(fmtDate(w.created,true))}${w.edited?` · edited ${P(rel(w.edited))}`:""}${w.completedAt?` · completed ${P(fmtDate(w.completedAt,true))}`:""}</div>
+    ${editLoc!==w.id?`<div class="strip"><span class="lab">Job area</span><span class="val">${P0.length?areaTxt:`<span style="color:var(--crit)">required — mark it on the model</span>`}</span>${P0.length?`<button class="btn sm teal" id="l-edit">Edit</button>`:`<button class="btn sm teal" id="l-add">＋ Mark job area</button>`}</div>`
+    :`<section class="ps"><h3 style="cursor:default">Job area <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${areaTxt}</span></h3><div class="locbox editing">
+      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${V.draw?.sel===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">${isMobile()?"Tap":"Click"} the model: one point, more for a line, then point ① to close an area.</div>`}
+      <div class="acts">${locKindW(w)==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m <span class="hint">(0 = flat)</span></label>`:""}
+      <button class="btn sm teal" id="l-done" style="margin-left:auto">Done</button></div></div></section>`}
+    <div class="addprop" id="toggle-details">${showDetails?"▾":"▸"} Details${empty.length?` · ${empty.length} empty propert${empty.length===1?"y":"ies"}`:""}</div>
+    ${showDetails?`<div class="props details">
       ${filled.map(rowHTML).join("")}
       ${empty.length?`<div class="addprop" id="toggle-empty">${showEmpty?"▾":"▸"} ${empty.length} empty propert${empty.length===1?"y":"ies"}</div>`:""}
       ${showEmpty?empty.map(rowHTML).join(""):""}
       <div class="addprop" id="add-prop">＋ Add a property</div>
-    </div>
-    <section class="ps"><h3 style="cursor:default">Job area <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${P0.length?P(shapeLabel(locShape(w))+(locKindW(w)==="area"&&locHeight(w)>0?" · "+locHeight(w)+" m":"")):`<span style="color:var(--crit)">required — not set</span>`}</span></h3><div class="locbox ${editLoc===w.id?"editing":"compact"}">
-      ${editLoc!==w.id?`<div class="acts">${P0.length?`<button class="btn sm" id="l-edit">Edit job area</button><button class="btn sm teal" id="l-fly" style="margin-left:auto">Fly to</button>`:`<span class="hint" style="flex:1">Every job needs a job area — mark it on the model: one point, a line, or close the loop for an area.</span><button class="btn sm primary" id="l-add">＋ Mark job area</button>`}</div>`
-      :`${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${V.draw?.sel===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">${isMobile()?"Tap":"Click"} the model: one point, more for a line, then point ① to close an area.</div>`}
-      <div class="acts">${locKindW(w)==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m <span class="hint">(0 = flat)</span></label>`:""}
-      <button class="btn sm teal" id="l-done" style="margin-left:auto">Done</button></div>`}
-    </div></section>
+    </div>`:""}
     ${notesHTML()}
     ${galleryHTML()}
     ${filesHTML()}
-    <section class="ps"><h3 style="cursor:default">Documents</h3><div class="fileblock">Document uploads (PDFs, reports) wait on Firebase Storage — a billing decision. Photos work now.</div></section>
-    <section class="ps"><h3>Comments</h3><div class="hint">Comments arrive in the next build.</div></section>
-    <section class="ps"><h3 id="act-h">${showAct?"▾":"▸"} Activity <span class="mono" style="font-weight:400" id="act-n">${ACT.length}</span></h3><div id="act" ${showAct?"":"hidden"}></div></section>
-    <div class="hint" style="margin-top:22px">Created ${P(fmtDate(w.created,true))} by ${P(w.createdBy?.name||"")} · last edited ${P(rel(w.edited))} by ${P(w.editedBy?.name||"")}${w.completedAt?` · completed ${P(fmtDate(w.completedAt,true))}`:""}</div>`;
+    <section class="ps"><h3 id="act-h">${showAct?"▾":"▸"} Activity <span class="mono" style="font-weight:400" id="act-n">${ACT.length}</span></h3><div id="act" ${showAct?"":"hidden"}></div></section>`;
   renderActivity(); wireGallery(); wireNotes(); wireFiles(); syncPinOverlays();
   const t=$("#ptitle"); const fit=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; fit(); t.oninput=fit;
   t.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); t.blur(); } if(e.key==="Escape"){ t.value=w.title||""; fit(); t.blur(); e.stopPropagation(); } };
   t.onblur=()=>setTitle(w.id,t.value.trim());
   if(w._focusTitle){ delete w._focusTitle; t.focus(); }
   $("#pbody").querySelector("[data-status]").onclick=e=>statusMenu(w,e.currentTarget);
-  $$("#pbody .pv[data-edit]").forEach(el=>el.onclick=e=>{ if(e.target.closest("a")) return; const a=e.target.closest("[data-asset]"); if(a){ const as=asset(a.dataset.asset); if(as) assetEditor(as,a); return; } startEdit(prop(el.dataset.edit),w,el); });
+  $$("#pbody .pv[data-edit]").forEach(el=>el.onclick=e=>{ if(e.target.closest("a")) return; const a=e.target.closest("[data-asset]"); if(a&&!el.classList.contains("chip")){ const as=asset(a.dataset.asset); if(as) assetEditor(as,a); return; } startEdit(prop(el.dataset.edit),w,el); });   // a chip always opens the picker; the asset editor lives in Details
   $$("#pbody .pn[title]").forEach(el=>el.onclick=()=>propertyMenu(prop(el.closest(".prop").dataset.pid),el));
   $("#toggle-empty")?.addEventListener("click",()=>{ showEmpty=!showEmpty; renderRecord(); });
-  $("#add-prop").onclick=e=>propertyCreator(e.currentTarget,p=>{ showEmpty=true; renderRecord(); const el=document.querySelector(`#pbody .pv[data-edit="${p.id}"]`); if(el) startEdit(p,w,el); });
+  $("#toggle-details")?.addEventListener("click",()=>{ showDetails=!showDetails; renderRecord(); });
+  $("#add-prop")?.addEventListener("click",e=>propertyCreator(e.currentTarget,p=>{ showEmpty=true; renderRecord(); const el=document.querySelector(`#pbody .pv[data-edit="${p.id}"]`); if(el) startEdit(p,w,el); }));
   $("#act-h").onclick=()=>{ showAct=!showAct; renderRecord(); };
   $("#l-add")?.addEventListener("click",()=>{ editLoc=w.id; if(!S.woView) enterWOView(w.id); addPoints(w.id); renderRecord(); });
   $("#l-edit")?.addEventListener("click",()=>{ editLoc=w.id; if(!S.woView) enterWOView(w.id); addPoints(w.id); renderRecord(); });
   $("#l-done")?.addEventListener("click",()=>{ if(V.draw){ $("#draw-done").click(); } else { editLoc=null; renderRecord(); syncPointHandles(); } });
-  $("#l-fly")?.addEventListener("click",()=>enterWOView(w.id));
   $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(0,+e.target.value||0),false,locClosed(w)));
   $$("#pbody [data-mv]").forEach(b=>b.onclick=()=>{ if(V.draw) selMove(+b.dataset.mv); else movePoint(w.id,+b.dataset.mv); });
   $$("#pbody [data-rm]").forEach(b=>b.onclick=()=>{ if(V.draw){ selRemove(+b.dataset.rm); return; } const p=pts(w).slice(); p.splice(+b.dataset.rm,1); setPoints(w.id,p,undefined,false,locClosed(w)); });
@@ -1638,7 +1650,10 @@ function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!==
   // fly only after the map has its final size: an animation started on a hidden or resizing map is dropped by the engine
   if(map){ requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>flyWO(w), (isMobile()||wasHidden)?320:60))); } }
 function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); syncJobLabels(); setTimeout(mapRedraw,350); setTimeout(mapRedraw,1200); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
-function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Job",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
+function woMode(){ const w=W(S.open); if(!w) return;
+  if(S.note&&typeof N==="function"&&N(S.note)){ const n=N(S.note); const par=n.parent?N(n.parent):null; const sibs=(typeof childrenOf==="function"?childrenOf(n.parent||null):[]).length;
+    setMode("wo note","Note",`<b>${P(noteTitle(n))}</b> · ${par?`inside ${P(noteTitle(par))}`:`${noteNo(n.id)} of ${sibs||"?"} in ${w.id}`} <button class="btn sm" id="mode-back">‹ Back</button>`,false); $("#mode-back").onclick=()=>closeNote(true); return; }
+  setMode("wo","Job",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
 function orbitSync(){ $("#orbit").hidden=true; }   // stock Google 3D gestures everywhere; no custom control layer
 function installLock(){ return;
   const el=$("#orbit"); const ptrs=new Map(); let last=null, pinch0=null, range0=0;
@@ -1988,7 +2003,7 @@ function openNote(nid,opts={}){ const n=N(nid); if(!n||!S.open) return; S.note=n
   if(n.kind==="model"&&map&&notePts(n).length){ const a=noteAnchor(n); const P=notePts(n); const ext=P.length>=2?Math.max(extentM(bbox(P)).ns,extentM(bbox(P)).ew):0; fly({ center:{ lat:a.lat, lng:a.lng, altitude:(a.ground??GROUND_FALLBACK)+2 }, range:Math.max(70,ext*1.8), tilt:62, heading:map.heading??0 },1200); }
   if(n.kind==="photo"){ highlightPhoto(n.photoId); const p=PH.find(x=>x.id===n.photoId); if(p&&map&&hasPos(p)) flyPhoto(p); }
   if(isMobile()) setSheet("half"); if(opts.focus) setTimeout(()=>{ $("#nv-text")?.focus(); },80); }
-function closeNote(up){ const n=S.note?N(S.note):null; S.note=up&&n?.parent?n.parent:null; if(!S.note) document.body.classList.remove("note-view"); selPin=S.note; highlightPhoto(null); renderRecord(); syncPinOverlays(); syncJobLabels(); setTimeout(mapRedraw,350); }
+function closeNote(up){ const n=S.note?N(S.note):null; S.note=up&&n?.parent?n.parent:null; if(!S.note) document.body.classList.remove("note-view"); selPin=S.note; highlightPhoto(null); renderRecord(); syncPinOverlays(); syncJobLabels(); if(S.woView) woMode(); setTimeout(mapRedraw,350); }
 function noteCardHTML(n,opts={}){
   const kids=childrenOf(n.id); const no=noteNo(n.id); const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const fc=(n.files||[]).length;
   let tile;
@@ -2021,11 +2036,11 @@ function renderNoteView(w){
   const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const kids=childrenOf(n.id); const depth=depthOf(n.id);
   $("#pk-id").textContent=`${w.id} · note ${noteNo(n.id)}`;
   $("#pbody").innerHTML=`<div class="nview">
-    <div class="crumbs">${crumbs.map(c=>c.here?`<b>${P(c.label)}</b>`:`<a href="#" data-crumb="${c.id||""}">${P(c.label)}</a><span class="sep">›</span>`).join("")}</div>
-    <div class="nhead"><span class="kico big">${KIND_ICON[n.kind]}</span><input class="ntitle-in" id="nv-title" placeholder="${P(noteTitle(n))}" value="${P(n.title||"")}"><button class="btn sm" id="nv-back" title="Back">‹ Back</button></div>
+    <div class="ctx"><span class="tag">Note</span><span class="lvl">${[1,2,3].map(l=>`<s class="${l<=depth?"on":""}"></s>`).join("")}</span><span class="crumbs">${crumbs.map(c=>c.here?`<b>${P(c.label)}</b>`:`<a href="#" data-crumb="${c.id||""}">${P(c.label)}</a><span class="sep">›</span>`).join("")}</span><button class="btn sm teal" id="nv-back" title="Back (Esc)">‹ ${depth>1?"Back":"Back to job"}</button></div>
+    <div class="nhead"><span class="kico big">${KIND_ICON[n.kind]}</span><input class="ntitle-in" id="nv-title" placeholder="${P(noteTitle(n))}" value="${P(n.title||"")}"><span class="chip soft">${n.kind==="model"?`${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}`:n.kind==="photo"?"Photo":n.kind==="file"?"Files":"Text"}</span></div>
     <textarea class="ntext big" id="nv-text" rows="2" placeholder="${n.kind==="text"?"Write the note…":"Add text to this note…"}">${P(n.text||"")}</textarea>
-    ${n.kind==="model"?`<section class="ps"><h3 style="cursor:default">Location <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}</span></h3><div class="locbox compact" id="nv-loc"><div class="acts"><button class="btn sm" id="nv-move">Edit location</button><button class="btn sm teal" id="nv-fly" style="margin-left:auto">Fly to</button></div></div></section>`:""}
-    ${n.kind==="photo"?`<section class="ps"><h3 style="cursor:default">Photo</h3>${p?`<div class="nphoto"><img src="${p.thumb}" alt="" id="nv-img"><div class="acts" style="margin-top:8px"><button class="btn sm teal" id="nv-edit">✎ Open photo editor</button><button class="btn sm" id="nv-move-ph">Move on model</button><button class="btn sm" id="nv-fly-ph" ${hasPos(p)?"":"disabled"}>Fly to</button></div></div>
+    ${n.kind==="model"?`<section class="ps"><h3 style="cursor:default">Location <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}</span></h3><div class="strip" id="nv-loc"><span class="lab">Location</span><span class="val">${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}</span><button class="btn sm teal" id="nv-move">${noteShape(n)==="pin"?"Move":"Edit"}</button></div></section>`:""}
+    ${n.kind==="photo"?`<section class="ps"><h3 style="cursor:default">Photo</h3>${p?`<div class="nphoto"><img src="${p.thumb}" alt="" id="nv-img"><div class="acts" style="margin-top:8px"><button class="btn sm teal" id="nv-edit">✎ Open photo editor</button><button class="btn sm" id="nv-move-ph">Move on model</button></div></div>
       ${p.marks?.length?`<div class="eyebrow" style="margin:10px 0 4px">Drawings on this photo · ${p.marks.length}</div><div class="marks nvmarks">${p.marks.map((m,i)=>`<div class="mk" data-mid="${m.id}"><span class="dot" style="background:${m.color}">${m.type==="point"?(m.n||""):""}</span><textarea class="in note" data-mid="${m.id}" rows="1" placeholder="${m.type==="point"?"Note for point "+(m.n||""):"Note for this drawing"}…">${P(m.note||"")}</textarea><button class="btn sm" data-open="${m.id}" title="Open in the editor">↗</button></div>`).join("")}</div>`:`<div class="hint" style="margin-top:6px">Open the editor to draw on the photo; each drawing becomes a note here.</div>`}`:`<div class="hint">This photo is no longer available.</div>`}</section>`:""}
     <section class="ps"><h3 style="cursor:default;display:flex;align-items:center;gap:8px">Files <span class="mono" style="font-weight:400">${(n.files||[]).length}</span><button class="btn sm" id="nv-addfile" style="margin-left:auto">＋ Add file</button></h3><input type="file" id="nv-file" multiple hidden><span class="hint" id="nv-upstat"></span>
       ${(n.files||[]).length?`<div class="files">${(n.files||[]).map(f=>fileRowHTML(f,n)).join("")}</div>`:`<div class="hint">No files. PDFs, reports, drawings — up to 50 MB each.</div>`}</section>
@@ -2033,14 +2048,14 @@ function renderNoteView(w){
       ${kids.length?`<div class="notes">${kids.map(k=>noteCardHTML(k)).join("")}</div>`:`<div class="hint">${depth<NOTE_DEPTH?"Nothing inside yet. Notes can hold text, shapes on the model, photos and files.":""}</div>`}</section>
     <div class="nmeta" style="margin-top:14px">${P(n.by||"")} · ${P(fmtDate(n.t,true))}${n.edited?` · edited ${P(rel(n.edited))} by ${P(n.editedBy||"")}`:""}<button class="btn sm danger" id="nv-del" style="margin-left:auto">Delete note</button></div>
   </div>`;
+  if(S.woView) woMode();
   $$("#pbody [data-crumb]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const id=a.dataset.crumb; if(!id){ S.note=null; document.body.classList.remove("note-view"); selPin=null; highlightPhoto(null); renderRecord(); syncPinOverlays(); } else openNote(id); });
   $("#nv-back").onclick=()=>closeNote(true);
   const ti=$("#nv-title"); ti.onblur=()=>{ if(ti.value.trim()!==(n.title||"")) updateNote(w.id,n.id,{ title:ti.value.trim() },ti,`renamed a note to “${ti.value.trim().slice(0,60)}”`); }; ti.onkeydown=e=>{ if(e.key==="Enter") ti.blur(); };
   const tx=$("#nv-text"); const grow=()=>{ tx.style.height="auto"; tx.style.height=Math.max(56,tx.scrollHeight)+"px"; }; grow(); tx.oninput=grow; tx.onblur=()=>{ if(tx.value.trim()!==(n.text||"")) updateNote(w.id,n.id,{ text:tx.value.trim() },tx,tx.value.trim()?`wrote in note ${noteNo(n.id)}: “${tx.value.trim().slice(0,80)}${tx.value.trim().length>80?"…":""}”`:`cleared note ${noteNo(n.id)}`); };
-  $("#nv-move")?.addEventListener("click",()=>drawNote(w.id,n.id)); $("#nv-fly")?.addEventListener("click",()=>openNote(n.id));
+  $("#nv-move")?.addEventListener("click",()=>drawNote(w.id,n.id));
   $("#nv-edit")?.addEventListener("click",()=>openViewer(n.photoId)); $("#nv-img")?.addEventListener("click",()=>openViewer(n.photoId));
   $("#nv-move-ph")?.addEventListener("click",()=>{ if(!map){ toast("The map is not loaded.",true); return; } setTab("map"); V.placing={ onPlace:pt=>{ savePoseCorrection(w.id,p,{ lat:pt.lat, lng:pt.lng, ground:pt.ground }); if(isMobile()) setSheet("half"); } }; map.classList.add("placing"); orbitSync(); setMode("place","Move photo",`${isMobile()?"Tap":"Click"} the model where this photo was taken.`,true); if(isMobile()) setSheet("peek"); });
-  $("#nv-fly-ph")?.addEventListener("click",()=>{ if(p) flyPhoto(p); });
   $$("#pbody .nvmarks .note").forEach(t=>{ const g=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; g(); t.oninput=g; t.onblur=()=>{ const m=p?.marks?.find(x=>x.id===t.dataset.mid); if(m&&(m.note||"")!==t.value.trim()){ m.note=t.value.trim(); flashSaved(t,()=>DB.update(WO_COL+"/"+w.id+"/photos/"+p.id,{ marks:packMarks(p.marks) })).catch(()=>{}); logNote(w.id,p,m,"wrote"); } }; t.onkeydown=ev=>{ if(ev.key==="Enter"&&!ev.shiftKey){ ev.preventDefault(); t.blur(); } }; });
   $$("#pbody [data-open]").forEach(b=>b.onclick=()=>openViewer(n.photoId,b.dataset.open));
   $("#nv-addfile").onclick=()=>$("#nv-file").click(); $("#nv-file").onchange=async e=>{ const files=[...e.target.files]; e.target.value=""; for(const f of files) await addFileToNote(w.id,n.id,f,$("#nv-upstat")); };
