@@ -1343,7 +1343,7 @@ function stubMaps3D(){ class El{ constructor(o){ Object.assign(this,o||{}); this
    Maps 3D has no hover position and no projection API, so the latest point is projected here with a pinhole model of
    Google's camera (center, range, tilt, heading, vertical fov); each real click is used to check the projection error and
    the line is hidden if the model is off by more than a third of the viewport. */
-const PV={ svg:null, mouse:null, err:0, overBox:false, hover:null };
+const PV={ svg:null, mouse:null, err:0, overBox:false, hover:null, seg:null };
 function projectLL(q){ if(!map||!map.center) return null; const el=map; const W=el.clientWidth, H=el.clientHeight; if(!W||!H) return null;
   const C=map.center, lat0=C.lat*Math.PI/180; const h=(map.heading||0)*Math.PI/180, t=(map.tilt||0)*Math.PI/180, r=map.range||300, fov=((map.fov||35)*Math.PI/180);
   const enu=p=>[ (p.lng-C.lng)*111320*Math.cos(lat0), (p.lat-C.lat)*111320, (p.altitude??p.alt??0)-(C.altitude||0) ];
@@ -1363,19 +1363,26 @@ function unprojectToPlane(sx,sy,zPlane){ if(!map||!map.center) return null; cons
   return { lat:C.lat+n/111320, lng:C.lng+e/(111320*Math.cos(lat0)), ground:zPlane }; }
 function previewInit(){ if(!map||PV.svg||!matchMedia("(pointer:fine)").matches) return; const wrap=$("#canvas-wrap"); const s=document.createElementNS("http://www.w3.org/2000/svg","svg"); s.id="draw-preview"; s.innerHTML=`<line id="pv-line" stroke="#FF6A00" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/><g id="pv-len"><rect x="-28" y="-11" width="56" height="22" rx="11" fill="rgba(11,15,31,0.6)" stroke="#FF6A00" stroke-dasharray="3 3"/><text y="4" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="11" fill="#fff"></text></g><g id="pv-pin" opacity="0.55"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="#FF6A00" stroke="#0B0F1F" stroke-width="1.6"/><circle cx="13" cy="13" r="4.2" fill="#0B0F1F"/></g>`; wrap.append(s); PV.svg=s;
   wrap.addEventListener("mousemove",e=>{ const r=map.getBoundingClientRect(); PV.mouse={ x:e.clientX-r.left, y:e.clientY-r.top }; hoverCheck(); previewDraw(); });
-  wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; if(PV.hover!=null){ PV.hover=null; renderDraw(); } previewDraw(); });
-  ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,previewDraw)); }
+  wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; PV.seg=null; if(PV.hover!=null){ PV.hover=null; renderDraw(); } if(map) map.style.cursor=""; previewDraw(); });
+  ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,()=>{ hoverCheck(); previewDraw(); })); }
 /* Hover over a placed point (desktop): Maps 3D has no marker hover, so the points are projected with the same camera model
    as the preview and the one under the cursor lights up; the next-point preview hides so the pin reads as the target. */
-function hoverCheck(){ const d=V.draw; let h=null; if(d&&PV.mouse&&!PV.overBox&&!d.moving&&PV.err<0.34){ const pinH=36*0.9; let bd=Infinity; d.pts.forEach((p,i)=>{ const s=projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }); if(!s) return; const dx=PV.mouse.x-s.x, dy=PV.mouse.y-(s.y-pinH/2); const dist=Math.hypot(dx,dy*0.8); if(dist<22&&dist<bd){ bd=dist; h=i; } }); }
-  if(h!==PV.hover){ PV.hover=h; renderDraw(); } if(map) map.style.cursor=h!=null?"pointer":""; }
-function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&PV.mouse&&!PV.overBox&&PV.hover==null&&(!d.closed||d.moving)); s.style.display=show?"block":"none"; if(!show) return;
-  const pin=s.querySelector("#pv-pin"); pin.setAttribute("transform",`translate(${PV.mouse.x-13*0.9},${PV.mouse.y-36*0.9}) scale(0.9)`);
-  const line=s.querySelector("#pv-line"), len=s.querySelector("#pv-len"); let extra=s.querySelector("#pv-extra"); if(!extra){ extra=document.createElementNS("http://www.w3.org/2000/svg","g"); extra.id="pv-extra"; s.append(extra); } extra.innerHTML="";
+function hoverCheck(){ const d=V.draw; let h=null, seg=null;
+  if(d&&PV.mouse&&!PV.overBox&&!d.moving&&PV.err<0.34){ const pinH=36*0.9; let bd=Infinity; const S=d.pts.map(p=>projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }));
+    S.forEach((s,i)=>{ if(!s) return; const dx=PV.mouse.x-s.x, dy=PV.mouse.y-(s.y-pinH/2); const dist=Math.hypot(dx,dy*0.8); if(dist<22&&dist<bd){ bd=dist; h=i; } });
+    if(h==null&&d.pts.length>=2){ const n=d.pts.length, segs=n-1+(d.closed?1:0); let sd=Infinity; for(let i=0;i<segs;i++){ const a=S[i], b=S[(i+1)%n]; if(!a||!b) continue; const dx=b.x-a.x, dy=b.y-a.y, L=dx*dx+dy*dy||1; let t=((PV.mouse.x-a.x)*dx+(PV.mouse.y-a.y)*dy)/L; t=Math.max(0,Math.min(1,t)); const px=a.x+t*dx, py=a.y+t*dy; const dist=Math.hypot(PV.mouse.x-px,PV.mouse.y-py); if(dist<12&&dist<sd){ sd=dist; seg={ i, t, x:px, y:py, ax:a.x, ay:a.y, bx:b.x, by:b.y }; } } } }
+  const segChanged=(seg?.i)!==(PV.seg?.i); PV.seg=seg; if(h!==PV.hover){ PV.hover=h; renderDraw(); } if(map) map.style.cursor=(h!=null||seg)?"pointer":""; }
+const PIN_D="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z";
+function tagSVG(x,y,text,teal){ const w=text.length*7+18; return `<g transform="translate(${x},${y})"><rect x="${-w/2}" y="-11" width="${w}" height="22" rx="11" fill="${teal?"#00FFE5":"rgba(11,15,31,0.85)"}" stroke="${teal?"#00FFE5":"rgba(255,255,255,0.25)"}"/><text y="4" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="11" fill="${teal?"#0B0F1F":"#fff"}">${text}</text></g>`; }
+function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const hoverUI=!!(d&&PV.mouse&&!PV.overBox&&!d.moving&&(PV.hover!=null||PV.seg)); const show=!!(d&&PV.mouse&&!PV.overBox&&d.moving)||hoverUI; s.style.display=show?"block":"none"; if(!show) return;
+  const pin=s.querySelector("#pv-pin"); const line=s.querySelector("#pv-line"), len=s.querySelector("#pv-len"); let extra=s.querySelector("#pv-extra"); if(!extra){ extra=document.createElementNS("http://www.w3.org/2000/svg","g"); extra.id="pv-extra"; s.append(extra); } extra.innerHTML=""; line.style.display="none"; len.style.display="none";
+  if(hoverUI){ pin.style.display="none"; const g=document.createElementNS("http://www.w3.org/2000/svg","g");
+    if(PV.seg){ const q=PV.seg; g.innerHTML=`<line x1="${q.ax}" y1="${q.ay}" x2="${q.bx}" y2="${q.by}" stroke="#00FFE5" stroke-width="7" stroke-linecap="round" opacity="0.95"/><g transform="translate(${q.x-13*1.05},${q.y-36*1.05}) scale(1.05)" opacity="0.92"><path d="${PIN_D}" fill="#00FFE5" stroke="#0B0F1F" stroke-width="1.6"/><path d="M13 8v10M8 13h10" stroke="#0B0F1F" stroke-width="2.4" stroke-linecap="round"/></g>${tagSVG(q.x,q.y-58,"Add a point here",true)}`; }
+    else { const i=PV.hover, p=d.pts[i]; const sp=projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }); const ring=i===0&&d.pts.length>=3&&!d.closed; if(sp) g.innerHTML=tagSVG(sp.x,sp.y-(ring?62:70),ring?"Close the area":`${d.closed?"Corner":"Point"} ${i+1} · click to edit`,false); }
+    extra.append(g); return; }
+  pin.style.display=""; pin.setAttribute("transform",`translate(${PV.mouse.x-13*0.9},${PV.mouse.y-36*0.9}) scale(0.9)`);
   const anchors=[]; const n=d.pts.length;
   if(d.moving&&d.sel!=null){ const i=d.sel; if(n>=2){ if(i>0) anchors.push(d.pts[i-1]); else if(d.closed) anchors.push(d.pts[n-1]); if(i<n-1) anchors.push(d.pts[i+1]); else if(d.closed) anchors.push(d.pts[0]); } }
-  else if(n&&!d.closed) anchors.push(d.pts[n-1]);
-  line.style.display="none"; len.style.display="none";
   if(PV.err>=0.34||!anchors.length) return;
   anchors.forEach((p,k)=>{ const from=projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }); if(!from) return;
     const q=unprojectToPlane(PV.mouse.x,PV.mouse.y,p.ground??0); const txt=q?"≈ "+fmtDist(dist3(p,q)):"";
@@ -1384,7 +1391,7 @@ function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
   if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); $("#mapgate").hidden=true; $("#loading").hidden=true;
-    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), close:()=>document.querySelector("#sel-hint [data-hint=close]")?.click(), tapLine:(lat,lng,alt=80)=>OV.draw.find(x=>x.__seg!=null)?.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, moving:()=>!!V.draw?.moving, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
+    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), close:()=>document.querySelector("#sel-hint [data-hint=close]")?.click(), tapLine:(lat,lng,alt=80)=>OV.draw.find(x=>x.__seg!=null)?.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, moving:()=>!!V.draw?.moving, proj:(lat,lng,alt=80)=>projectLL({lat,lng,altitude:alt+0.8}), hoverSeg:()=>PV.seg?.i??null, hoverPin:()=>PV.hover, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
     requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); }); return; }
   const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
@@ -1453,7 +1460,8 @@ function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 }; previewCheck(p);
   if(V.draw){ const d=V.draw; if(PV.overBox) return; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
     if(d.moving&&d.sel!=null){ d.pts[d.sel]={ ...d.pts[d.sel], ...p }; d.moving=false; selChanged(); return; }   // stays selected: the box comes back on the moved point
-    if(d.closed){ toast("The area is closed — Reopen it to add corners, or press Done.",true); return; }
+    if(PV.seg){ selInsertAt(p,PV.seg.i); return; }
+    if(d.closed){ toast("The area is closed — click the line to add a corner, Reopen it, or press Done.",true); return; }
     d.pts.push(p); d.sel=null; selChanged(); return; }
   if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); orbitSync(); }
 }
@@ -1483,10 +1491,10 @@ function selChanged(){ const d=V.draw; if(!d) return; renderDraw(); previewDraw(
 function selSelect(i){ const d=V.draw; if(!d) return; d.moving=false; d.sel=i; renderDraw(); }
 function selReopen(){ const d=V.draw; if(!d||!d.closed) return; d.closed=false; d.sel=d.pts.length-1; selChanged(); }
 /* insert on the line: the clicked spot goes into the segment it is nearest to (2D, metres) */
-function selInsertAt(p){ const d=V.draw; if(!d||d.pts.length<2) return; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
+function selInsertAt(p,at){ const d=V.draw; if(!d||d.pts.length<2) return; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
   const lat0=p.lat*Math.PI/180, X=q=>[(q.lng-p.lng)*111320*Math.cos(lat0),(q.lat-p.lat)*111320]; const n=d.pts.length, segs=n-1+(d.closed?1:0); let best=-1, bd=Infinity;
   for(let i=0;i<segs;i++){ const [ax,ay]=X(d.pts[i]), [bx,by]=X(d.pts[(i+1)%n]); const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy||1; let t=(-ax*dx-ay*dy)/L; t=Math.max(0,Math.min(1,t)); const ex=ax+t*dx, ey=ay+t*dy; const dist=Math.hypot(ex,ey); if(dist<bd){ bd=dist; best=i; } }
-  if(best<0) return; d.pts.splice(best+1,0,p); d.sel=best+1; d.moving=false; selChanged(); }
+  if(at!=null) best=at; if(best<0) return; d.pts.splice(best+1,0,p); d.sel=best+1; d.moving=false; PV.seg=null; PV.hover=null; selChanged(); }
 function selCancelMove(){ const d=V.draw; if(!d||!d.moving) return; d.moving=false; renderDraw(); previewDraw(); }
 function selMove(i){ const d=V.draw; if(!d) return; d.sel=i; d.moving=true; renderDraw(); }
 function selRemove(i){ const d=V.draw; if(!d) return; d.pts.splice(i,1); if(d.pts.length<3) d.closed=false; d.sel=d.pts.length?Math.min(Math.max(i-1,0),d.pts.length-1):null; d.moving=false; selChanged(); }   // box snaps back to the previous point
@@ -1567,7 +1575,7 @@ function renderDraw(){
   $("#draw-acts").hidden=false; $("#draw-done").disabled=d.needClosed&&!d.closed;
   renderHint(); renderActs();
 }
-function clearDraw(){ PV.hover=null; if(map) map.style.cursor=""; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
+function clearDraw(){ PV.hover=null; PV.seg=null; if(map) map.style.cursor=""; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
 $("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(d.needClosed&&!sh.closed) return; if(sh.kind==="none"&&!d.live){ selCancel(); return; } clearDraw(); resetMode(); d.onDone(sh); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   select3D({ initial:{ points:BOUNDARY(), closed:true }, label:"Site boundary", needClosed:true, site:true, onDone:async sh=>{ S.site={ ...(S.site||{}), boundary:sh.points }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
