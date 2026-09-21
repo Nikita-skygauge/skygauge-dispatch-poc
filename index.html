@@ -123,7 +123,7 @@ gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 #act-box button{font:600 13px/1 var(--sans,system-ui);padding:9px 14px;border-radius:999px;border:1px solid rgba(11,15,31,.6);cursor:pointer;min-width:104px}
 #act-box .act-done{background:#00FFE5;color:#0B0F1F}#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-reopen{background:#3A4270;color:#fff}
 #sel-hint{position:absolute;z-index:6;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);padding:7px 14px;border-radius:999px;background:rgba(11,15,31,.82);border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 18px rgba(0,0,0,.3);backdrop-filter:blur(6px);color:#E6EAF5;font:500 13px/1.2 var(--sans,system-ui);white-space:nowrap;pointer-events:auto}
-#sel-hint[hidden]{display:none}#sel-hint b{color:#fff}#sel-hint button{font:600 12px/1 var(--sans,system-ui);padding:6px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}#sel-hint button:hover{background:rgba(255,255,255,.22)}
+#sel-hint[hidden]{display:none}#sel-hint b{color:#fff}#sel-hint button{font:600 12px/1 var(--sans,system-ui);padding:6px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}#sel-hint button:hover{background:rgba(255,255,255,.22)}#sel-hint button.primary{background:#00FFE5;border-color:#00FFE5;color:#0B0F1F;font-size:13px;padding:7px 14px}#sel-hint button.primary:hover{background:#5cfff0}#sel-hint button.primary:disabled{opacity:.45;cursor:not-allowed}
 @media (max-width:860px){ #sel-hint{top:8px;font-size:12px;white-space:normal;text-align:center} #sel-hint button{min-height:36px} }
 @media (max-width:860px){ #act-box button{min-height:44px;min-width:120px;font-size:14px} }
 #draw-preview{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;display:none}
@@ -251,6 +251,9 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 
 /* creation flow */
 body.creating #mode,body.creating #draw-acts{display:none!important}
+/* creation: the map is the whole workspace — no record panel until the job exists */
+body.creating-map.wo-view #view-map{grid-template-columns:1fr} body.creating-map #peek,body.creating-map #peek-slot{display:none!important}
+@media (max-width:860px){ body.creating-map.wo-view #canvas-wrap{bottom:calc(64px + var(--sab))!important} }
 body.creating #pk-save,body.creating #pk-fly,body.creating #pk-more,body.creating #pk-close,body.creating #pk-exit,body.creating.wo-view[data-tab="map"] #pk-exit{display:none!important}
 body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;flex-direction:column;flex:1;min-height:0}
 .create-foot{margin-top:auto;display:flex;justify-content:flex-end;gap:10px;padding-top:16px;border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--panel)}
@@ -757,7 +760,7 @@ function flashSaved(el,run){   // run: a function that starts the write — the 
 }
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
-async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; } await DB.del(WO_COL+"/"+id); }
+async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; mapRedraw(); } await DB.del(WO_COL+"/"+id); }
 function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); const dcut=Date.now()-86400000; S.wos.filter(w=>w.draft&&S.creating!==w.id&&w.createdBy?.uid===S.user.uid&&new Date(w.created)<dcut).forEach(w=>purgeWO(w.id)); }
 async function duplicateWO(id){ const w=W(id); if(!w) return; const nid=await createWO({ title:(w.title||"Untitled")+" (copy)", statusId:w.statusId, values:structuredClone(w.values||{}), location:structuredClone(w.location) }); openWO(nid); }
 async function saveSchema(){ S.schema.version=(S.schema.version||1); await DB.set("workspace/schema",S.schema); renderAll(); }
@@ -1121,25 +1124,16 @@ function recordMenu(anchor){
 }
 
 function renderCreate(w){
-  const P0=pts(w); const sh=locShape(w); const verb=isMobile()?"Tap":"Click";
   $("#pk-id").textContent="New job";
+  if(map){ $("#pbody").innerHTML=""; if(!V.draw && S.creating===w.id) addPoints(w.id); return; }   // with a map the pill carries Create job / Cancel; the panel below is the no-map fallback
+  const P0=pts(w); const sh=locShape(w);
   $("#pbody").innerHTML=`<div class="create">
     <h2 style="font-size:22px;font-weight:600;margin:6px 0 4px">Mark the job area</h2>
-    <p class="hint">${verb} the model. One point is a point, more make a line, ${verb.toLowerCase()} point ① to close it into an area. It saves as you go.</p>
-    <div class="locbox" style="margin-top:12px">
-      <div class="eyebrow" style="margin-bottom:6px">${P0.length?"Job area · "+shapeLabel(sh):"Nothing placed yet"}</div>
-      ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="${verb} the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:""}
-      <div class="acts" style="margin-top:8px">${P0.length?`<button class="btn sm" id="c-undo">Remove last point</button>`:""}${sh.kind==="line"&&P0.length>=3?`<button class="btn sm teal" id="c-close">Create area</button>`:""}${sh.kind==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}</div>
-    </div>
+    <p class="hint">The map is not loaded — enter a Maps key to place points on the model.</p>
+    <div class="locbox" style="margin-top:12px"><div class="eyebrow">${P0.length?"Job area · "+shapeLabel(sh):"Nothing placed yet"}</div></div>
     <div class="create-foot"><button class="btn" id="c-cancel">Cancel</button><button class="btn teal" id="c-create" ${P0.length?"":"disabled"} title="${P0.length?"":"Place at least one point"}">Create Job</button></div>
   </div>`;
-  if($("#c-undo")) $("#c-undo").onclick=()=>{ if(V.draw){ if(V.draw.pts.length) selRemove(V.draw.pts.length-1); } else { const p=pts(w).slice(); p.pop(); setPoints(w.id,p,undefined,true,locClosed(w)); } };
-  $("#c-close")?.addEventListener("click",()=>{ if(V.draw) selClose(); });
-  $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(0,+e.target.value||0),true,locClosed(w)));
-  $$("#pbody [data-rm]").forEach(b=>b.onclick=()=>{ if(V.draw){ selRemove(+b.dataset.rm); return; } const p=pts(w).slice(); p.splice(+b.dataset.rm,1); setPoints(w.id,p,undefined,true,locClosed(w)); });
-  $$("#pbody [data-mv]").forEach(b=>b.onclick=()=>{ if(!V.draw) addPoints(w.id); selMove(+b.dataset.mv); toast(`${verb} the model where point ${+b.dataset.mv+1} should be.`); });
   $("#c-cancel").onclick=cancelCreate; $("#c-create").onclick=finishCreate;
-  if(!V.draw && S.creating===w.id && map) addPoints(w.id);
 }
 
 /* =====================================================================
@@ -1310,6 +1304,11 @@ async function exportJSON(){
    ===================================================================== */
 let map=null, lib=null; const OV={ wo:{}, asset:{}, site:null, draw:[] }; let placePin=null;
 const V={ draw:null, placing:null };
+/* Maps 3D (beta) keeps drawing a removed marker until the camera changes — the element is gone from the DOM but its
+   sprite stays on screen. After any batch of marker removals, nudge the heading by a hair and back on the next frame so
+   the engine repaints. Skipped while a fly is in progress (its own frames repaint). */
+let redrawT=0;
+function mapRedraw(){ if(!map||redrawT) return; redrawT=requestAnimationFrame(()=>{ redrawT=0; if(typeof flying!=="undefined"&&flying) return; try{ const h=map.heading||0; map.heading=h+0.0005; requestAnimationFrame(()=>{ try{ if(!(typeof flying!=="undefined"&&flying)) map.heading=h; }catch{} }); }catch{} }); }
 const BOUNDARY=()=>S.site?.boundary||DEFAULT_BOUNDARY;
 function inPoly(p,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat))&&(p.lng<(b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
 function offset(lat,lng,dx,dy){ return { lat:lat+dy/111320, lng:lng+dx/(111320*Math.cos(lat*Math.PI/180)) }; }
@@ -1397,7 +1396,7 @@ function drawSite(){ if(!map) return; OV.site?.remove(); const B=BOUNDARY(); con
 function syncAssetOverlays(){ /* assets carry no location (register only) */ }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
 function woColor(w){ return col(status(w.statusId)?.color).map; }
-function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); OV.wo[id].box?.remove(); (OV.wo[id].labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
+function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); OV.wo[id].box?.remove(); (OV.wo[id].labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; mapRedraw(); } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
 /* Points stay where they were clicked on the model (roof, platform, shell) instead of dropping to the ground: each point
    stores the surface altitude `ground` from the click, and overlays use ABSOLUTE altitude from it. Legacy points without
    it fall back to RELATIVE_TO_MESH, which also sits on the surface. */
@@ -1417,10 +1416,10 @@ function addWOOverlay(w){
   OV.wo[w.id]=o; applyLegendTo(w); syncJobLabels();   // lengths / pin visibility follow the open state
 }
 /* segment lengths belong to the open job only: strip them from every other job, add them to the open one */
-function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ o.labels.forEach(x=>x.remove()); o.labels=[]; } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
-  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.m.remove(); o.pinHidden=true; } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
+function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ o.labels.forEach(x=>x.remove()); o.labels=[]; mapRedraw(); } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
+  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.m.remove(); o.pinHidden=true; mapRedraw(); } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
-function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
+function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; mapRedraw(); if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
@@ -1468,7 +1467,7 @@ function select3D(opts){
   if(!map){ toast("The map is not loaded.",true); return false; }
   clearDraw(); $("#orbit").hidden=true; clearPointHandles();
   const P=(opts.initial?.points||[]).map(cp);
-  V.draw={ kind:"sel", label:opts.label||"Shape", pts:P, closed:!!opts.initial?.closed&&P.length>=3, live:!!opts.live, needClosed:!!opts.needClosed, site:!!opts.site, noDone:!!opts.noDone, noteId:opts.noteId||null, sel:null, moving:false,
+  V.draw={ kind:"sel", label:opts.label||"Shape", pts:P, closed:!!opts.initial?.closed&&P.length>=3, live:!!opts.live, needClosed:!!opts.needClosed, site:!!opts.site, noDone:!!opts.noDone, noteId:opts.noteId||null, primary:opts.primary||null, sel:null, moving:false,
            onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, initial:{ points:P.map(cp), closed:!!opts.initial?.closed&&P.length>=3 } };
   map.classList.add("drawing"); renderDraw(); return true;
 }
@@ -1487,7 +1486,7 @@ function ringTemplate(active,selected){ const NS="http://www.w3.org/2000/svg", s
 /* The actions for the latest (or selected) point sit in one HTML box anchored to that point on screen (projected with the
    same camera model as the preview). Being HTML, the box swallows its own clicks — the map never sees them — and while the
    pointer is inside it, placing is paused and the preview hides. Re-anchored on every camera change. */
-const ACT_DEFS=[ ["done","Done ✓","act-done"], ["move","Move","act-move"], ["delete","Delete","act-del"], ["reopen","Reopen loop","act-reopen"] ];
+const ACT_DEFS=[ ["move","Move","act-move"], ["delete","Delete","act-del"], ["reopen","Reopen loop","act-reopen"] ];
 let ACTBOX=null;
 function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap) return; const box=document.createElement("div"); box.id="act-box"; box.hidden=true; wrap.append(box); ACTBOX=box;
   box.addEventListener("pointerenter",()=>{ PV.overBox=true; if(PV.svg) PV.svg.style.display="none"; }); box.addEventListener("pointerleave",()=>{ PV.overBox=false; placeActBox(); previewDraw(); });
@@ -1497,18 +1496,22 @@ function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap
 /* Hint pill: one slim line at the top of the map while the selector is open — what the next click does, plus the one
    escape hatch the action box cannot carry (Cancel move; Cancel when there is nothing placed yet). */
 let HINT=null;
-function renderHint(){ const wrap=$("#canvas-wrap"); if(!wrap) return; if(!HINT){ HINT=document.createElement("div"); HINT.id="sel-hint"; wrap.append(HINT); HINT.addEventListener("click",e=>{ const b=e.target.closest("[data-hint]"); if(!b) return; e.stopPropagation(); if(b.dataset.hint==="cancel-move") selCancelMove(); else if(b.dataset.hint==="cancel") selCancel(); else if(b.dataset.hint==="done") $("#draw-done").click(); }); }
+function renderHint(){ const wrap=$("#canvas-wrap"); if(!wrap) return; if(!HINT){ HINT=document.createElement("div"); HINT.id="sel-hint"; wrap.append(HINT); HINT.addEventListener("click",e=>{ const b=e.target.closest("[data-hint]"); if(!b||b.disabled) return; e.stopPropagation(); const d=V.draw; if(!d) return; const k=b.dataset.hint;
+    if(k==="cancel-move") selCancelMove(); else if(k==="cancel"){ if(d.primary?.onCancel) d.primary.onCancel(); else selCancel(); } else if(k==="primary"){ if(d.primary?.onClick) d.primary.onClick(); else $("#draw-done").click(); } }); }
   const d=V.draw; if(!d){ HINT.hidden=true; return; } const n=d.pts.length, verb=isMobile()?"Tap":"Click", sh=shapeKindOf(d.pts,d.closed);
-  let txt, btn="";
-  if(d.moving&&d.sel!=null){ txt=`${verb} the model where point <b>${d.sel+1}</b> goes`; btn=`<button type="button" data-hint="cancel-move">Cancel move</button>`; }
-  else if(n===0){ txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb.toLowerCase()} the model to start again`:`${verb} the model to place the first point`; btn=d.noDone?"":d.live?`<button type="button" data-hint="done">Done</button>`:`<button type="button" data-hint="cancel">Cancel</button>`; }
-  else if(d.closed) txt=`Area · <b>${n}</b> corners${d.live?" · saved":""}`;
-  else if(n>=3) txt=`${verb} point ① to close the area, or keep adding`;
-  else if(d.needClosed) txt=`An area needs three corners, then close the loop`;
-  else txt=`${sh==="point"?"Point":"Line · "+n+" points"}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add`;
-  HINT.innerHTML=`<span>${txt}</span>${btn}`; HINT.hidden=false; }
+  let txt, btns="";
+  if(d.moving&&d.sel!=null){ txt=`${verb} the model where point <b>${d.sel+1}</b> goes`; btns=`<button type="button" data-hint="cancel-move">Cancel move</button>`; }
+  else {
+    if(n===0) txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb.toLowerCase()} the model to start again`:`${verb} the model to place the first point`;
+    else if(d.closed) txt=`Area · <b>${n}</b> corners${d.live?" · saved":""}`;
+    else if(n>=3) txt=`${verb} point ① to close the area, or keep adding`;
+    else if(d.needClosed) txt=`An area needs three corners, then close the loop`;
+    else txt=`${sh==="point"?"Point":"Line · "+n+" points"}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add`;
+    const ok=n>=1&&!(d.needClosed&&!d.closed); const label=d.primary?.label||"Done ✓";
+    btns=`<button type="button" data-hint="cancel">${d.primary?.cancelLabel||"Cancel"}</button><button type="button" class="primary" data-hint="primary" ${ok||(d.live&&n===0&&!d.primary)?"":"disabled"} title="${ok?"":"Place at least one point"}">${label}</button>`; }
+  HINT.innerHTML=`<span>${txt}</span>${btns}`; HINT.hidden=false; }
 function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) return; if(!d||!d.pts.length||d.moving){ box.hidden=true; PV.overBox=false; return; }
-  const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&(d.noDone||(d.needClosed&&!d.closed)))&&!(k==="reopen"&&!d.closed));
+  const defs=ACT_DEFS.filter(([k])=>!(k==="reopen"&&!d.closed));
   box.innerHTML=defs.map(([k,l,cls])=>`<button type="button" class="${cls}" data-act="${k}">${l}</button>`).join(""); box.hidden=false; placeActBox(); }
 function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length||PV.overBox) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
   const s=(PV.err<0.34)?projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }):null; const bw=box.offsetWidth||120, bh=box.offsetHeight||44;
@@ -1531,7 +1534,7 @@ function segmentLabels(P,closed){ const out=[]; if(!map||!lib||P.length<2) retur
     const m=new lib.Marker3DElement({ position:atSurf(mid,1.6), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); m.append(distLabelTemplate(fmtDist(dist3(a,c)))); map.append(m); out.push(m); }
   return out; }
 function renderDraw(){
-  const d=V.draw; if(!d) return; OV.draw.forEach(x=>x.remove()); OV.draw=[];
+  const d=V.draw; if(!d) return; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); }
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
   const movingI=d.moving&&d.sel!=null?d.sel:-1;
   d.pts.forEach((p,i)=>{ const first=i===0&&!d.closed&&n>1; const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,first?0.2:0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
@@ -1548,7 +1551,7 @@ function renderDraw(){
   $("#draw-acts").hidden=false; $("#draw-done").disabled=d.needClosed&&!d.closed;
   renderHint(); renderActs();
 }
-function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
+function clearDraw(){ if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
 $("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(d.needClosed&&!sh.closed) return; if(sh.kind==="none"&&!d.live){ selCancel(); return; } clearDraw(); resetMode(); d.onDone(sh); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   select3D({ initial:{ points:BOUNDARY(), closed:true }, label:"Site boundary", needClosed:true, site:true, onDone:async sh=>{ S.site={ ...(S.site||{}), boundary:sh.points }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
@@ -1557,7 +1560,7 @@ $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
 /* ---------- job area: the selector with live save; numbered handles when idle ---------- */
 function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } if(S.tab!=="map") setTab("map");
   const before=locShape(w);
-  select3D({ initial:before, label:"Job area", live:true, noDone:!!W(id)?.draft,
+  select3D({ initial:before, label:"Job area", live:true, primary:W(id)?.draft?{ label:"Create job", onClick:()=>finishCreate(), cancelLabel:"Cancel", onCancel:()=>cancelCreate() }:null,
     onChange:sh=>setPoints(id,sh.points,undefined,true,sh.closed),
     onDone:sh=>{ setPoints(id,sh.points,undefined,true,sh.closed); syncPointHandles(); relock(); if(!W(id)?.draft&&JSON.stringify(sh)!==JSON.stringify(before)) log(id, sh.kind==="none"?"cleared the job area":before.kind==="none"?`set the job area (${shapeLabel(sh)})`:`changed the job area (${shapeLabel(sh)})`); if(typeof editLoc!=="undefined"&&editLoc===id){ editLoc=null; renderRecord(); } },
     onCancel:sh=>{ setPoints(id,sh.points,undefined,true,sh.closed); syncPointHandles(); relock(); if(typeof editLoc!=="undefined"&&editLoc===id){ editLoc=null; renderRecord(); } } }); }
@@ -1573,7 +1576,7 @@ function selectPoint(i,flyTo){ const id=S.open; const w=W(id); if(!w||!map) retu
   if(flyTo){ const p=d.pts[i]; fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } }
 /* numbered handles for the open record's points while nothing is being edited; click → selector with that point selected */
 const PTH=[];
-function clearPointHandles(){ PTH.forEach(x=>x.remove()); PTH.length=0; }
+function clearPointHandles(){ if(PTH.length){ PTH.forEach(x=>x.remove()); PTH.length=0; mapRedraw(); } }
 function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw) return; const w=W(S.open); if(!w) return; const P=pts(w); if(P.length<1) { if(!V.placing) resetMode(); return; }
   const mode=surf(P); P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,P.length===1?(p.alt||0)+0.5:0.8), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); const focus=(typeof hoverPin!=="undefined"&&hoverPin)||(S.note||null); m.append(pinTemplate(focus?"#8A93AD":"#FF6A00",focus?0.7:0.85,undefined,i+1).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
   if(!V.placing) resetMode(); }
@@ -1621,17 +1624,17 @@ function installLock(){ return;
 /* ---------- Creation flow: location first, then Create Job ---------- */
 async function startCreate(init={}){
   if(S.creating){ if(isMobile()) setSheet("half"); return; }   // already creating: just bring the panel back
-  let id; try{ id=await createWO({ ...init, draft:true }); }catch(e){ toast("Couldn't start a job — "+(navigator.onLine===false?"you are offline.":(e.message||e)),true); return; } S.creating=id; document.body.classList.add("creating");
-  enterWOView(id); if(map) addPoints(id); else toast("The map is not loaded — points can be added once it is.",true); if(isMobile()) setSheet("half");
+  let id; try{ id=await createWO({ ...init, draft:true }); }catch(e){ toast("Couldn't start a job — "+(navigator.onLine===false?"you are offline.":(e.message||e)),true); return; } S.creating=id; document.body.classList.add("creating"); if(map) document.body.classList.add("creating-map");   // with a map the pill carries Create job / Cancel and the panel stays hidden; without one the panel is the fallback
+  enterWOView(id); if(map) addPoints(id); else toast("The map is not loaded — points can be added once it is.",true);
 }
 async function finishCreate(){
   const id=S.creating; const w=W(id); if(!w) return; if(!pts(w).length){ toast("Mark the job area on the model first.",true); return; }
-  clearDraw(); S.creating=null; document.body.classList.remove("creating"); w.draft=false; w._focusTitle=true;
+  clearDraw(); S.creating=null; document.body.classList.remove("creating","creating-map"); w.draft=false; w._focusTitle=true;
   await DB.update(WO_COL+"/"+id,{ draft:false, ...stamp() }); const n=pts(w).length; log(id,`created the job · ${shapeLabel(locShape(w))}`);
   refreshWOOverlay(w,true); syncPointHandles(); renderAll(); woMode(); if(map) flyWO(w); setTimeout(()=>$("#ptitle")?.focus(),50);
 }
 async function cancelCreate(){
-  const id=S.creating; clearDraw(); S.creating=null; document.body.classList.remove("creating"); exitWOView(); if(id) await purgeWO(id);
+  const id=S.creating; clearDraw(); S.creating=null; document.body.classList.remove("creating","creating-map"); exitWOView(); if(id) await purgeWO(id);
 }
 
 /* =====================================================================
@@ -1846,7 +1849,7 @@ function camSvg(fill,scale=1){ const NS="http://www.w3.org/2000/svg", s=document
 function syncPhotoOverlays(){
   if(!map||!lib) return; if(!S.woView||!S.open){ clearPhotoOverlays(); return; }   // a job's photos and notes show only inside that job's view
   const want=new Set(PH.filter(hasPos).map(p=>p.id));
-  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].sight?.forEach(x=>x.remove()); delete PHOV[id]; } });
+  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].sight?.forEach(x=>x.remove()); delete PHOV[id]; mapRedraw(); } });
   PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e)+(PHOV[p.id]?.hl?"#":""); const o=PHOV[p.id]; if(o&&o.sig===sig) return; o?.m.remove(); o?.sight?.forEach(x=>x.remove());
     const fill=o?.hl?"#00FFE5":"#B9C2DA";   // grey by default; teal when hovered or open
     // the icon sits on the surface the photo was placed on (roof, platform…), not on the ground under it
@@ -1855,7 +1858,7 @@ function syncPhotoOverlays(){
     PHOV[p.id]={ m, sight:[], sig, hl:o?.hl||false }; });   // heading is not drawn: phone compasses proved too unreliable on site
 }
 function tpl(svg){ const t=document.createElement("template"); t.content.append(svg); return t; }
-function clearPhotoOverlays(){ Object.values(PHOV).forEach(o=>{ o.m.remove(); o.sight?.forEach(x=>x.remove()); }); for(const k in PHOV) delete PHOV[k]; }
+function clearPhotoOverlays(){ const n=Object.keys(PHOV).length; Object.values(PHOV).forEach(o=>{ o.m.remove(); o.sight?.forEach(x=>x.remove()); }); for(const k in PHOV) delete PHOV[k]; if(n) mapRedraw(); }
 function highlightPhoto(pid){ Object.entries(PHOV).forEach(([id,o])=>{ const hl=id===pid; if(hl!==o.hl){ o.hl=hl; o.sig=""; } }); $$("#gal .th").forEach(t=>t.classList.toggle("hl",t.dataset.pid===pid)); syncPhotoOverlays(); }
 function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGround(p);
   LOCK=null; fly({ center:{ lat:e.lat, lng:e.lng, altitude:g+2 }, range:60, tilt:62, heading:map.heading??0 },1600); }
@@ -2026,7 +2029,7 @@ function wireFiles(){ $$("#files [data-gonote]").forEach(a=>a.onclick=e=>{ e.pre
 function markSVG(m){ if(m.type==="point"){ const [x,y]=m.pts[0]; return `<circle cx="${x}" cy="${y}" r="0.045" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.016" text-anchor="middle" font-size="0.05" font-weight="700" fill="#0B0F1F">${m.n||""}</text>`; } return `<path d="M${m.pts.map(q=>q.join(",")).join(" L")}" fill="none" stroke="${m.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
 function pinTileSVG(no){ return `<svg viewBox="0 0 26 36" class="pintile"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="${PIN_NOTE_COLOR}" stroke="#0B0F1F" stroke-width="1.6"/><text x="13" y="16.6" text-anchor="middle" font-size="${String(no).length>1?"9":"10.5"}" font-weight="700" fill="#0B0F1F">${no}</text></svg>`; }
 function noteAnchor(k){ const P=notePts(k); if(P.length===1) return P[0]; const c=centroid(P); const g=P.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?g.reduce((a,b)=>a+b,0)/g.length:undefined }; }
-function clearPinOverlays(){ Object.values(PINOV).forEach(a=>a.forEach(x=>x.remove())); for(const k in PINOV) delete PINOV[k]; }
+function clearPinOverlays(){ const n=Object.keys(PINOV).length; Object.values(PINOV).forEach(a=>a.forEach(x=>x.remove())); for(const k in PINOV) delete PINOV[k]; if(n) mapRedraw(); }
 function focusPinNote(id,nid){ openNote(nid); }
 function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woView) return; const w=W(S.open); if(!w) return;
   const focus=hoverPin||S.note; const openSet=focus?new Set([focus,...descendants(focus).map(x=>x.id),...ancestors(focus).map(x=>x.id)]):null;
