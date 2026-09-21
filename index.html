@@ -119,11 +119,15 @@ gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 
 /* jobs page */
 #view-wo{display:flex;flex-direction:column;background:var(--ground);transition:margin-right .2s ease}
-#act-box{position:absolute;z-index:6;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:12px;background:rgba(11,15,31,.82);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
-#act-box button{font:600 13px/1 var(--sans,system-ui);padding:9px 14px;border-radius:999px;border:1px solid rgba(11,15,31,.6);cursor:pointer;min-width:104px}
-#act-box .act-done{background:#00FFE5;color:#0B0F1F}#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-reopen{background:#3A4270;color:#fff}
+#act-box{position:absolute;z-index:6;display:flex;flex-direction:row;gap:6px;padding:6px;border-radius:999px;background:rgba(11,15,31,.85);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
+#act-box[hidden]{display:none}
+#act-box button{width:38px;height:38px;padding:0;border-radius:50%;border:0;cursor:pointer;display:grid;place-items:center}
+#act-box button svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-reopen{background:#3A4270;color:#fff}
+#act-box button:hover{filter:brightness(1.12)}
+@media (max-width:860px){ #act-box button{width:44px;height:44px} }
 #sel-hint{position:absolute;z-index:6;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);padding:7px 14px;border-radius:999px;background:rgba(11,15,31,.82);border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 18px rgba(0,0,0,.3);backdrop-filter:blur(6px);color:#E6EAF5;font:500 13px/1.2 var(--sans,system-ui);white-space:nowrap;pointer-events:auto}
-#sel-hint[hidden]{display:none}#sel-hint b{color:#fff}#sel-hint button{font:600 12px/1 var(--sans,system-ui);padding:6px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}#sel-hint button:hover{background:rgba(255,255,255,.22)}#sel-hint button.primary{background:#00FFE5;border-color:#00FFE5;color:#0B0F1F;font-size:13px;padding:7px 14px}#sel-hint button.primary:hover{background:#5cfff0}#sel-hint button.primary:disabled{opacity:.45;cursor:not-allowed}
+#sel-hint[hidden]{display:none}#sel-hint b{color:#fff}#sel-hint button{font:600 12px/1 var(--sans,system-ui);padding:6px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}#sel-hint button:hover{background:rgba(255,255,255,.22)}#sel-hint button.close{background:#fff;border-color:#fff;color:#0B0F1F;font-size:13px;padding:7px 14px}#sel-hint button.primary{background:#00FFE5;border-color:#00FFE5;color:#0B0F1F;font-size:13px;padding:7px 14px}#sel-hint button.primary:hover{background:#5cfff0}#sel-hint button.primary:disabled{opacity:.45;cursor:not-allowed}
 @media (max-width:860px){ #sel-hint{top:8px;font-size:12px;white-space:normal;text-align:center} #sel-hint button{min-height:36px} }
 @media (max-width:860px){ #act-box button{min-height:44px;min-width:120px;font-size:14px} }
 #draw-preview{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;display:none}
@@ -1334,7 +1338,7 @@ let mapInit=false;
 /* Headless test harness: ?mock=1&map=stub swaps Google's 3D library for inert stand-ins so the 3D selector and overlays run without WebGL. */
 function stubMaps3D(){ class El{ constructor(o){ Object.assign(this,o||{}); this.children=[]; this.style={}; this.listeners={}; } append(...c){ this.children.push(...c); c.forEach(x=>x.parent=this); } remove(){ if(this.parent){ this.parent.children=this.parent.children.filter(x=>x!==this); this.parent=null; } } addEventListener(t,f){ (this.listeners[t]??=[]).push(f); } removeEventListener(t,f){ this.listeners[t]=(this.listeners[t]||[]).filter(x=>x!==f); } fire(t,e){ (this.listeners[t]||[]).forEach(f=>f(e||{})); } }
   class M3 extends El{ constructor(o){ super(o); this.classList=document.createElement("div").classList; this.center=o?.center; this.range=o?.range; this.tilt=o?.tilt; this.heading=o?.heading; } flyCameraTo({endCamera}){ Object.assign(this,endCamera||{}); setTimeout(()=>this.fire("gmp-animationend"),10); } flyCameraAround(){} }
-  return { Map3DElement:M3, Marker3DElement:El, Marker3DInteractiveElement:El, Polyline3DElement:El, Polygon3DElement:El }; }
+  return { Map3DElement:M3, Marker3DElement:El, Marker3DInteractiveElement:El, Polyline3DElement:El, Polyline3DInteractiveElement:El, Polygon3DElement:El }; }
 /* Desktop preview while placing points: a dashed line from the latest point to the cursor and a translucent pin under it.
    Maps 3D has no hover position and no projection API, so the latest point is projected here with a pinhole model of
    Google's camera (center, range, tilt, heading, vertical fov); each real click is used to check the projection error and
@@ -1376,7 +1380,7 @@ function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
   if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); $("#mapgate").hidden=true; $("#loading").hidden=true;
-    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, moving:()=>!!V.draw?.moving, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
+    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), close:()=>document.querySelector("#sel-hint [data-hint=close]")?.click(), tapLine:(lat,lng,alt=80)=>OV.draw.find(x=>x.__seg!=null)?.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, moving:()=>!!V.draw?.moving, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
     requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); }); return; }
   const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
@@ -1440,7 +1444,7 @@ $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); onFlyEnd(()=>m
 /* ---------- mode bar, placing and drawing ---------- */
 function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; if(isMobile()&&S.open){ if(cls==="draw"||cls==="place") setSheet("peek"); else if($("#peek").dataset.sheet==="peek") setSheet("half"); } md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
 function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view",isMobile()?"Tap a pin or an area to open it.":"Click a pin or a job area to open it.",false); }
-$("#mode-exit").onclick=()=>{ const d=V.draw; if(d){ if(d.moving){ selCancelMove(); return; } if(d.live){ $("#draw-done").click(); return; } selCancel(); return; } V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; resetMode(); syncPointHandles(); orbitSync(); };
+$("#mode-exit").onclick=()=>{ const d=V.draw; if(d){ if(d.moving){ selCancelMove(); return; } if(d.sel!=null){ d.sel=null; renderDraw(); return; } if(d.live){ $("#draw-done").click(); return; } selCancel(); return; } V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 }; previewCheck(p);
   if(V.draw){ const d=V.draw; if(PV.overBox) return; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
@@ -1474,18 +1478,20 @@ function select3D(opts){
 function selChanged(){ const d=V.draw; if(!d) return; renderDraw(); previewDraw(); d.onChange?.(shapeOf(d)); }
 function selSelect(i){ const d=V.draw; if(!d) return; d.moving=false; d.sel=i; renderDraw(); }
 function selReopen(){ const d=V.draw; if(!d||!d.closed) return; d.closed=false; d.sel=d.pts.length-1; selChanged(); }
+/* insert on the line: the clicked spot goes into the segment it is nearest to (2D, metres) */
+function selInsertAt(p){ const d=V.draw; if(!d||d.pts.length<2) return; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
+  const lat0=p.lat*Math.PI/180, X=q=>[(q.lng-p.lng)*111320*Math.cos(lat0),(q.lat-p.lat)*111320]; const n=d.pts.length, segs=n-1+(d.closed?1:0); let best=-1, bd=Infinity;
+  for(let i=0;i<segs;i++){ const [ax,ay]=X(d.pts[i]), [bx,by]=X(d.pts[(i+1)%n]); const dx=bx-ax, dy=by-ay, L=dx*dx+dy*dy||1; let t=(-ax*dx-ay*dy)/L; t=Math.max(0,Math.min(1,t)); const ex=ax+t*dx, ey=ay+t*dy; const dist=Math.hypot(ex,ey); if(dist<bd){ bd=dist; best=i; } }
+  if(best<0) return; d.pts.splice(best+1,0,p); d.sel=best+1; d.moving=false; selChanged(); }
 function selCancelMove(){ const d=V.draw; if(!d||!d.moving) return; d.moving=false; renderDraw(); previewDraw(); }
 function selMove(i){ const d=V.draw; if(!d) return; d.sel=i; d.moving=true; renderDraw(); }
 function selRemove(i){ const d=V.draw; if(!d) return; d.pts.splice(i,1); if(d.pts.length<3) d.closed=false; d.sel=d.pts.length?Math.min(Math.max(i-1,0),d.pts.length-1):null; d.moving=false; selChanged(); }   // box snaps back to the previous point
 function selClose(){ const d=V.draw; if(!d||d.pts.length<3||d.closed) return; d.closed=true; d.sel=null; d.moving=false; selChanged(); }
 function selCancel(){ const d=V.draw; if(!d) return; clearDraw(); resetMode(); d.onCancel?.({ kind:shapeKindOf(d.initial.points,d.initial.closed), points:d.initial.points, closed:d.initial.closed }); syncPointHandles(); }
-/* point ① while the loop is open: a ring target; with three or more points it also carries the "Create area" label */
-function ringTemplate(active,selected){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 96 44"); s.setAttribute("width","96"); s.setAttribute("height","44"); const c=selected?"#00FFE5":"#FF6A00";
-  s.innerHTML=`<circle cx="48" cy="22" r="13" fill="${selected?"rgba(0,255,229,0.3)":"rgba(255,106,0,0.25)"}" stroke="${c}" stroke-width="3"/><circle cx="48" cy="22" r="4" fill="${c}"/><text x="48" y="26.5" text-anchor="middle" font-family="IBM Plex Mono,ui-monospace,Menlo,monospace" font-weight="700" font-size="11" fill="#0B0F1F">1</text>${active?`<rect x="10" y="0" width="76" height="14" rx="7" fill="#00FFE5"/><text x="48" y="10.5" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="9.5" fill="#0B0F1F">Create area ▾</text>`:""}`;
-  const t=document.createElement("template"); t.content.append(s); return t; }
 /* The actions for the latest (or selected) point sit in one HTML box anchored to that point on screen (projected with the
    same camera model as the preview). Being HTML, the box swallows its own clicks — the map never sees them — and while the
    pointer is inside it, placing is paused and the preview hides. Re-anchored on every camera change. */
+const ACT_ICON={ move:'<svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>', delete:'<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 14h10l1-14M10 11v6M14 11v6"/></svg>', reopen:'<svg viewBox="0 0 24 24"><path d="M5 12a7 7 0 1 1 3 5.7M3 18l2-4 4 2"/></svg>' };
 const ACT_DEFS=[ ["move","Move","act-move"], ["delete","Delete","act-del"], ["reopen","Reopen loop","act-reopen"] ];
 let ACTBOX=null;
 function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap) return; const box=document.createElement("div"); box.id="act-box"; box.hidden=true; wrap.append(box); ACTBOX=box;
@@ -1497,27 +1503,28 @@ function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap
    escape hatch the action box cannot carry (Cancel move; Cancel when there is nothing placed yet). */
 let HINT=null;
 function renderHint(){ const wrap=$("#canvas-wrap"); if(!wrap) return; if(!HINT){ HINT=document.createElement("div"); HINT.id="sel-hint"; wrap.append(HINT); HINT.addEventListener("click",e=>{ const b=e.target.closest("[data-hint]"); if(!b||b.disabled) return; e.stopPropagation(); const d=V.draw; if(!d) return; const k=b.dataset.hint;
-    if(k==="cancel-move") selCancelMove(); else if(k==="cancel"){ if(d.primary?.onCancel) d.primary.onCancel(); else selCancel(); } else if(k==="primary"){ if(d.primary?.onClick) d.primary.onClick(); else $("#draw-done").click(); } }); }
+    if(k==="cancel-move") selCancelMove(); else if(k==="close") selClose(); else if(k==="cancel"){ if(d.primary?.onCancel) d.primary.onCancel(); else selCancel(); } else if(k==="primary"){ if(d.primary?.onClick) d.primary.onClick(); else $("#draw-done").click(); } }); }
   const d=V.draw; if(!d){ HINT.hidden=true; return; } const n=d.pts.length, verb=isMobile()?"Tap":"Click", sh=shapeKindOf(d.pts,d.closed);
   let txt, btns="";
   if(d.moving&&d.sel!=null){ txt=`${verb} the model where point <b>${d.sel+1}</b> goes`; btns=`<button type="button" data-hint="cancel-move">Cancel move</button>`; }
   else {
-    if(n===0) txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb.toLowerCase()} the model to start again`:`${verb} the model to place the first point`;
-    else if(d.closed) txt=`Area · <b>${n}</b> corners${d.live?" · saved":""}`;
-    else if(n>=3) txt=`${verb} point ① to close the area, or keep adding`;
-    else if(d.needClosed) txt=`An area needs three corners, then close the loop`;
-    else txt=`${sh==="point"?"Point":"Line · "+n+" points"}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add`;
+    const v=verb.toLowerCase(), corner=d.closed?"Corner":"Point";
+    if(n===0) txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb} the model to start again`:`${verb} the model to place the first point`;
+    else if(d.sel!=null) txt=`${corner} <b>${d.sel+1}</b> · pick a tool${d.closed?"":`, or ${v} the model to add`}`;
+    else if(d.closed) txt=`Area · <b>${n}</b> corners · ${v} the line to add a corner, a pin to edit`;
+    else if(n===1) txt=`Point${d.live?" · saved":""} · ${v} the model to add`;
+    else txt=`Line · <b>${n}</b> points · ${v} the model to add, a pin to edit${n>=3&&!d.needClosed?", or close the area":""}${d.needClosed?" · an area needs three, then Close":""}`;
     const ok=n>=1&&!(d.needClosed&&!d.closed); const label=d.primary?.label||"Done ✓";
-    btns=`<button type="button" data-hint="cancel">${d.primary?.cancelLabel||"Cancel"}</button><button type="button" class="primary" data-hint="primary" ${ok||(d.live&&n===0&&!d.primary)?"":"disabled"} title="${ok?"":"Place at least one point"}">${label}</button>`; }
+    btns=`<button type="button" data-hint="cancel">${d.primary?.cancelLabel||"Cancel"}</button>${n>=3&&!d.closed?`<button type="button" class="close" data-hint="close">Close area</button>`:""}<button type="button" class="primary" data-hint="primary" ${ok||(d.live&&n===0&&!d.primary)?"":"disabled"} title="${ok?"":"Place at least one point"}">${label}</button>`; }
   HINT.innerHTML=`<span>${txt}</span>${btns}`; HINT.hidden=false; }
-function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) return; if(!d||!d.pts.length||d.moving){ box.hidden=true; PV.overBox=false; return; }
+function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) return; if(!d||!d.pts.length||d.moving||(d.closed&&d.sel==null)){ box.hidden=true; PV.overBox=false; return; }   // a closed loop shows no box until a corner is clicked
   const defs=ACT_DEFS.filter(([k])=>!(k==="reopen"&&!d.closed));
-  box.innerHTML=defs.map(([k,l,cls])=>`<button type="button" class="${cls}" data-act="${k}">${l}</button>`).join(""); box.hidden=false; placeActBox(); }
+  box.innerHTML=defs.map(([k,l,cls])=>`<button type="button" class="${cls}" data-act="${k}" title="${l}" aria-label="${l}">${ACT_ICON[k]}</button>`).join(""); box.hidden=false; placeActBox(); }
 function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length||PV.overBox) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
   const s=(PV.err<0.34)?projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }):null; const bw=box.offsetWidth||120, bh=box.offsetHeight||44;
   let x=W-bw-16, y=16;
   if(s){ const others=d.pts.map((q,k)=>k===i?null:projectLL({ lat:q.lat, lng:q.lng, altitude:(q.ground??0)+0.8 })).filter(Boolean);
-    const cands=[ [s.x-bw/2, s.y-bh-46], [s.x+28, s.y-bh/2-20], [s.x-bw-28, s.y-bh/2-20], [s.x-bw/2, s.y+16] ];
+    const cands=[ [s.x-bw/2, s.y-bh-44], [s.x+22, s.y-bh/2-18], [s.x-bw-22, s.y-bh/2-18], [s.x-bw/2, s.y+14] ];
     const clamp=([cx,cy])=>[ Math.max(8,Math.min(W-bw-8,cx)), Math.max(8,Math.min(H-bh-8,cy)) ];
     const covers=([cx,cy])=>others.some(o=>o.x>cx-14&&o.x<cx+bw+14&&o.y>cy-40&&o.y<cy+bh+14)||(s.x>cx-6&&s.x<cx+bw+6&&s.y>cy-6&&s.y<cy+bh+6);
     let pick=null; for(const c of cands){ const cc=clamp(c); if(!covers(cc)){ pick=cc; break; } } [x,y]=pick||clamp(cands[0]); }
@@ -1537,11 +1544,12 @@ function renderDraw(){
   const d=V.draw; if(!d) return; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); }
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
   const movingI=d.moving&&d.sel!=null?d.sel:-1;
-  d.pts.forEach((p,i)=>{ const first=i===0&&!d.closed&&n>1; const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,first?0.2:0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
-    m.append(first?ringTemplate(canClose,d.sel===0):pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":"#FF6A00",i===movingI?0.7:0.9,undefined,i+1).tpl);
-    m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; if(first&&canClose){ selClose(); return; } selSelect(i); }); map.append(m); OV.draw.push(m); });
+  d.pts.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
+    m.append(pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":"#FF6A00",i===movingI?0.7:0.9,undefined,i+1).tpl);
+    m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; selSelect(i); }); map.append(m); OV.draw.push(m); });
   const ring=[...d.pts,...(d.closed?[d.pts[0]]:[])];
-  if(n>=2&&movingI<0){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=ring.map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
+  if(n>=2&&movingI<0){ const IL=lib.Polyline3DInteractiveElement||lib.Polyline3DElement; const l=new IL({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?7:5, drawsOccludedSegments:true }); l.path=ring.map(p=>atSurf(p,0.8)); l.__seg=true;
+    l.addEventListener?.("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving||!e.position) return; selInsertAt({ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 }); }); map.append(l); OV.draw.push(l); }
   if(n>=2&&movingI>=0){ // the moving point's own segments are left out; the preview supplies them
     const runs=[]; let cur=[]; ring.forEach((p,idx)=>{ const isMoving=p===d.pts[movingI]; if(isMoving){ if(cur.length>=2) runs.push(cur); cur=[]; } else cur.push(p); }); if(cur.length>=2) runs.push(cur);
     runs.forEach(r=>{ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=r.map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }); }
