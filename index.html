@@ -255,7 +255,18 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 @media (max-width:700px){ #viewer{grid-template-columns:1fr;grid-template-rows:auto minmax(0,1fr) auto} .vw-img{padding:8px} .vw-side{border-left:0;border-top:1px solid #3A4270;max-height:42dvh;padding:10px} .vw-tools .btn{min-height:40px} .swc{width:32px;height:32px} .mk .note{font-size:16px} }
 
 /* notes (one drawing = one note) */
-.notes{display:flex;flex-direction:column;gap:8px}
+.notes{display:flex;flex-direction:column;gap:4px}
+.note.nr{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;min-height:44px}
+.nr .num{font:700 11px/1 var(--mono);color:var(--ink-3);min-width:16px;text-align:right;white-space:nowrap}
+.nr .g{width:30px;height:30px;border-radius:7px;background:var(--panel);display:grid;place-items:center;flex:none;color:var(--ink-2);font-size:15px}.nr .g svg{width:20px;height:20px}
+.nr .g.ph{width:40px;height:40px;background:#000;position:relative;overflow:hidden}.nr .g.ph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nr .g.ph i{position:absolute;right:2px;bottom:2px;font:600 9px/1 var(--sans);background:rgba(11,15,31,.85);color:#fff;padding:2px 4px;border-radius:4px;font-style:normal}
+.nr .t{flex:1;min-width:0}.nr .t b{display:block;font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nr .t span{color:var(--ink-3);font-size:11.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nr .k{font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:5px;padding:2px 6px;white-space:nowrap}
+.nr .chev{min-width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);border:1px solid transparent;background:transparent;font:inherit;padding:0 6px;cursor:default}
+.nr .chev.has{color:var(--ink);border-color:var(--line);background:var(--panel);cursor:pointer}.nr .chev.has:hover{border-color:var(--sel)}.nr .chev.has b{font:700 10px/1 var(--mono)}
+.nr.here{background:rgba(0,255,229,.08)}
+.kids{margin:0 0 4px 22px;padding-left:12px;border-left:2px solid var(--line);display:flex;flex-direction:column;gap:4px}.kids .kids{border-left-color:#3A4270}
+.kids .note.nr{position:relative}.kids .note.nr::before{content:"";position:absolute;left:-14px;width:12px;height:2px;background:var(--line);top:50%}
 .note{display:grid;grid-template-columns:140px 1fr;gap:12px;background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:8px;cursor:pointer}
 .note:hover{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}.note.ncard.sel,.note.pinnote.sel{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
 .nph{position:relative;aspect-ratio:1;border-radius:6px;overflow:hidden;background:#000}.nph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nph svg{position:absolute;inset:0;width:100%;height:100%}.nph text{font-family:var(--mono)}
@@ -2004,16 +2015,28 @@ function openNote(nid,opts={}){ const n=N(nid); if(!n||!S.open) return; S.note=n
   if(n.kind==="photo"){ highlightPhoto(n.photoId); const p=PH.find(x=>x.id===n.photoId); if(p&&map&&hasPos(p)) flyPhoto(p); }
   if(isMobile()) setSheet("half"); if(opts.focus) setTimeout(()=>{ $("#nv-text")?.focus(); },80); }
 function closeNote(up){ const n=S.note?N(S.note):null; S.note=up&&n?.parent?n.parent:null; if(!S.note) document.body.classList.remove("note-view"); selPin=S.note; highlightPhoto(null); renderRecord(); syncPinOverlays(); syncJobLabels(); if(S.woView) woMode(); setTimeout(mapRedraw,350); }
+/* Notes list: 44 px rows (number · glyph · title + meta · kind · chevron). A row whose note has children carries a chevron
+   with the count; it unfolds the children in place, three levels deep. Expanded state lives in NEXP for the open job. */
+const NEXP=new Set();
+const GLYPH={ pin:'<svg viewBox="0 0 20 20"><path d="M10 2a6 6 0 0 0-6 6c0 4.5 6 10 6 10s6-5.5 6-10a6 6 0 0 0-6-6z" fill="#FFD400" stroke="#0B0F1F" stroke-width="1.2"/></svg>',
+  line:'<svg viewBox="0 0 20 20"><path d="M3 15l5-7 4 3 5-7" fill="none" stroke="#FFD400" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  area:'<svg viewBox="0 0 20 20"><path d="M3 12l6-7 8 4-5 7z" fill="rgba(255,212,0,.3)" stroke="#FFD400" stroke-width="1.8" stroke-linejoin="round"/></svg>' };
+function noteMetaExtra(n){ if(n.kind==="model"){ const P=notePts(n), sh=noteShape(n); if(sh==="area") return `${P.length} corners`; if(sh==="line"){ let L=0; for(let i=1;i<P.length;i++) L+=dist3(P[i-1],P[i]); return `${P.length} points · ${fmtDist(L)}`; } return ""; }
+  if(n.kind==="file"){ const fs=n.files||[]; const b=fs.reduce((a,f)=>a+(f.size||0),0); return `${fs.length} file${fs.length===1?"":"s"}${b?" · "+fmtBytes(b):""}`; }
+  if(n.kind==="text"&&n.text){ const t=n.text.trim().replace(/\s+/g," "); return t.length>48?`“${t.slice(0,48)}…”`:`“${t}”`; }
+  if(n.kind==="photo"&&n.text) return n.text.trim().slice(0,48); return ""; }
 function noteCardHTML(n,opts={}){
-  const kids=childrenOf(n.id); const no=noteNo(n.id); const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const fc=(n.files||[]).length;
-  let tile;
-  if(n.kind==="model") tile=`<div class="nph pin">${pinTileSVG(no)}<span class="nshape">${NOTE_LABEL[noteShape(n)]}</span></div>`;
-  else if(n.kind==="photo") tile=`<div class="nph">${p?`<img src="${p.thumb}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none">${(p.marks||[]).map(markSVG).join("")}</svg>`:`<div class="hint" style="padding:8px">photo…</div>`}${p?.marks?.length?`<span class="nshape">✎ ${p.marks.length}</span>`:""}</div>`;
-  else if(n.kind==="file") tile=`<div class="nph pin"><span class="kico">${KIND_ICON.file}</span><span class="nshape">${fc} file${fc===1?"":"s"}</span></div>`;
-  else tile=`<div class="nph pin"><span class="kico">${KIND_ICON.text}</span></div>`;
-  return `<div class="note ncard" data-kind="${n.kind}" data-nid="${n.id}"><div class="ntile">${tile}<span class="nnum">${no}</span></div>
-    <div class="nbody"><div class="ntitle">${P(noteTitle(n))}</div>${n.kind!=="text"&&n.text?`<div class="npreview">${P(n.text.slice(0,120))}</div>`:n.kind==="text"&&n.text.split("\n").length>1?`<div class="npreview">${P(n.text.split("\n").slice(1).join(" ").slice(0,100))}</div>`:""}
-    <div class="nmeta"><i style="background:${n.kind==="model"?PIN_NOTE_COLOR:"var(--line)"}"></i>${P(n.by||"")} · ${P(fmtDate(n.t,true))}${kids.length?` · ${kids.length} inside`:""}${fc&&n.kind!=="file"?` · ${fc} file${fc===1?"":"s"}`:""}</div></div></div>`; }
+  const kids=childrenOf(n.id); const no=String(noteNo(n.id)); /* flat number = what the pin on the model shows */ const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const fc=(n.files||[]).length;
+  let g;
+  if(n.kind==="model") g=`<span class="g">${GLYPH[noteShape(n)]||GLYPH.pin}</span>`;
+  else if(n.kind==="photo") g=`<span class="g ph">${p?`<img src="${p.thumb}" alt="">`:""}${p?.marks?.length?`<i>✎${p.marks.length}</i>`:""}</span>`;
+  else if(n.kind==="file") g=`<span class="g">${KIND_ICON.file}</span>`;
+  else g=`<span class="g">≡</span>`;
+  const kind=n.kind==="model"?NOTE_LABEL[noteShape(n)]:n.kind==="photo"?"Photo":n.kind==="file"?"Files":"Text";
+  const extra=noteMetaExtra(n); const open=NEXP.has(n.id); const here=S.note===n.id;
+  const row=`<div class="note ncard nr ${here?"here":""}" data-kind="${n.kind}" data-nid="${n.id}"><span class="num">${no}</span>${g}<div class="t"><b>${P(noteTitle(n))}</b><span>${P((n.by||"").split(" ")[0])} · ${P(fmtDate(n.t))}${extra?" · "+P(extra):""}${fc&&n.kind!=="file"?` · ${fc} file${fc===1?"":"s"}`:""}</span></div><span class="k">${kind}</span>${kids.length?`<button type="button" class="chev has" data-fold="${n.id}" title="${open?"Hide":"Show"} ${kids.length} note${kids.length===1?"":"s"} inside">${open?"▾":"▸"}<b>${kids.length}</b></button>`:`<span class="chev">·</span>`}</div>`;
+  const depth=(opts.depth||1);
+  return row+(kids.length&&open&&depth<NOTE_DEPTH?`<div class="kids">${kids.map(k=>noteCardHTML(k,{ depth:depth+1 })).join("")}</div>`:""); }
 function notesHTML(){
   const top=childrenOf(null);
   return `<section class="ps" id="notes"><h3 style="cursor:default;display:flex;align-items:center;gap:8px">Notes <span class="mono" style="font-weight:400">${NT.length}</span><button class="btn sm teal" id="n-add" style="margin-left:auto">＋ Note</button></h3>
@@ -2023,6 +2046,7 @@ function renderNotes(){ const el=$("#notes"); if(!el||S.note) return; el.outerHT
 function wireNotes(){ const w=W(S.open); if(!w) return; wireNoteCommon(w.id);
   $("#n-add")?.addEventListener("click",e=>noteMenu(w.id,null,e.currentTarget)); }
 function wireNoteCommon(id){
+  $$("[data-fold]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); const id=b.dataset.fold; if(NEXP.has(id)) NEXP.delete(id); else NEXP.add(id); if(S.note) renderRecord(); else renderNotes(); });
   $$(".ncard").forEach(c=>{ c.onclick=e=>{ if(e.target.closest("textarea,button,a")) return; openNote(c.dataset.nid); };
     // hovering a card lights its shape (or photo icon) on the model; leaving restores it
     const n=N(c.dataset.nid); if(!n) return;
