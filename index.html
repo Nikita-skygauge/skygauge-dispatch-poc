@@ -259,7 +259,7 @@ section.ps h3{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color
 .note.nr{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:9px;min-height:44px}
 .nr .num{font:700 11px/1 var(--mono);color:var(--ink-3);min-width:16px;text-align:right;white-space:nowrap}
 .nr .g{width:30px;height:30px;border-radius:7px;background:var(--panel);display:grid;place-items:center;flex:none;color:var(--ink-2);font-size:15px}.nr .g svg{width:20px;height:20px}
-.nr .g.ph{width:40px;height:40px;background:#000;position:relative;overflow:hidden}.nr .g.ph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nr .g.ph i{position:absolute;right:2px;bottom:2px;font:600 9px/1 var(--sans);background:rgba(11,15,31,.85);color:#fff;padding:2px 4px;border-radius:4px;font-style:normal}
+.nr .g.ph{width:40px;height:40px;background:#000;position:relative;overflow:hidden}.nr .g.ph img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}.nr .g.ph svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}.nr .g.ph svg text{font-family:var(--mono)}.nr .g.ph i{position:absolute;right:2px;bottom:2px;font:600 9px/1 var(--sans);background:rgba(11,15,31,.85);color:#fff;padding:2px 4px;border-radius:4px;font-style:normal}
 .nr .t{flex:1;min-width:0}.nr .t b{display:block;font-weight:600;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.nr .t span{color:var(--ink-3);font-size:11.5px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .nr .k{font-size:10.5px;color:var(--ink-3);border:1px solid var(--line);border-radius:5px;padding:2px 6px;white-space:nowrap}
 .nr .chev{min-width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;gap:3px;color:var(--ink-3);border:1px solid transparent;background:transparent;font:inherit;padding:0 6px;cursor:default}
@@ -1342,15 +1342,14 @@ let redrawRetry=0, redrawBack=0, redrawSign=1;
 /* The nudge is one-sided and stays for ~400 ms: an immediate revert on the next frame collapses into "no change" in the
    engine and nothing repaints (seen live: notes lingered until the camera moved). The step back comes later and is itself
    a second repaint. 0.001° of heading is invisible. */
-/* Maps 3D (beta) sometimes keeps drawing a marker after it is removed from the DOM — seen live after a rebuild-heavy
-   sequence (hover → note → exit mid-flight); no camera change clears it, and the app holds no reference any more. So an
-   element is never just removed: first it is buried (moved 5 km underground, occlusion drawing off) while still attached —
-   property changes on attached elements are reliable — and removed a frame later. A leaked object is then invisible. */
-function killEl(x){ if(!x) return; try{ if(x.position){ x.drawsWhenOccluded=false; const p=x.position; x.altitudeMode="ABSOLUTE"; x.position={ lat:p.lat, lng:p.lng, altitude:-5000 }; } else if("path" in x){ try{ x.drawsOccludedSegments=false; }catch{} try{ x.path=[]; }catch{} } }catch{} setTimeout(()=>{ try{ x.remove(); }catch{} },90); }
-function killAll(a){ (a||[]).forEach(killEl); }
-function mapRedraw(){ if(!map||redrawT) return; redrawT=requestAnimationFrame(()=>{ redrawT=0;
-  if(typeof flying!=="undefined"&&flying){ clearTimeout(redrawRetry); redrawRetry=setTimeout(mapRedraw,250); return; }
-  try{ const d=0.001*redrawSign; redrawSign=-redrawSign; map.heading=(map.heading||0)+d; clearTimeout(redrawBack); redrawBack=setTimeout(()=>{ try{ if(!(typeof flying!=="undefined"&&flying)) map.heading=(map.heading||0)-d; }catch{} },400); }catch{} }); }
+/* Maps 3D (beta) can keep drawing a marker that was removed while a camera flight was in progress (reproduced live:
+   note → exit mid-flight). Burying elements or nudging the camera made things worse (leaked objects seem to be keyed by
+   content, so the fresh marker inherited the buried state; heading pokes could abort a flight and corrupt the range).
+   The fix that holds: stop any camera animation before a batch of removals, then remove. */
+function stopFlight(){ if(!map) return; try{ if(typeof flying!=="undefined"&&flying){ map.stopCameraAnimation?.(); flying=false; clearTimeout(flyT); } }catch{} }
+function killEl(x){ if(!x) return; try{ x.remove(); }catch{} }
+function killAll(a){ if(!a||!a.length) return; stopFlight(); a.forEach(killEl); }
+function mapRedraw(){ /* no camera pokes: they interfered with flights; removals are made safe by stopFlight() instead */ }
 const BOUNDARY=()=>S.site?.boundary||DEFAULT_BOUNDARY;
 function inPoly(p,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat))&&(p.lng<(b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
 function offset(lat,lng,dx,dy){ return { lat:lat+dy/111320, lng:lng+dx/(111320*Math.cos(lat*Math.PI/180)) }; }
@@ -1470,7 +1469,7 @@ function addWOOverlay(w){
 }
 /* segment lengths belong to the open job only: strip them from every other job, add them to the open one */
 function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ killAll(o.labels); o.labels=[]; mapRedraw(); } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
-  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.pinPos=o.m.position; o.pinMode=o.m.altitudeMode; o.m.altitudeMode="ABSOLUTE"; o.m.position={ lat:o.pinPos.lat, lng:o.pinPos.lng, altitude:-5000 }; o.pinHidden=true; mapRedraw(); } else if(!hidePin&&o.pinHidden){ o.m.altitudeMode=o.pinMode; o.m.position=o.pinPos; o.pinHidden=false; mapRedraw(); } } }); }
+  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ stopFlight(); o.m.remove(); o.pinHidden=true; } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); delete OV.wo[w.id]; mapRedraw(); if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(hide&&!o.hidden){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); o.hidden=true; mapRedraw(); } else if(!hide&&o.hidden){ delete OV.wo[w.id]; addWOOverlay(w); } }   // legend off: parts are buried and dropped; back on: rebuilt
@@ -2038,7 +2037,7 @@ function noteCardHTML(n,opts={}){
   const kids=childrenOf(n.id); const no=String(noteNo(n.id)); /* flat number = what the pin on the model shows */ const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const fc=(n.files||[]).length;
   let g;
   if(n.kind==="model") g=`<span class="g">${GLYPH[noteShape(n)]||GLYPH.pin}</span>`;
-  else if(n.kind==="photo") g=`<span class="g ph">${p?`<img src="${p.thumb}" alt="">`:""}${p?.marks?.length?`<i>✎${p.marks.length}</i>`:""}</span>`;
+  else if(n.kind==="photo") g=`<span class="g ph">${p?`<img src="${p.thumb}" alt=""><svg viewBox="0 0 1 1" preserveAspectRatio="none">${(p.marks||[]).map(markSVG).join("")}</svg>`:""}${p?.marks?.length?`<i>✎${p.marks.length}</i>`:""}</span>`;
   else if(n.kind==="file") g=`<span class="g">${KIND_ICON.file}</span>`;
   else g=`<span class="g">≡</span>`;
   const kind=n.kind==="model"?NOTE_LABEL[noteShape(n)]:n.kind==="photo"?"Photo":n.kind==="file"?"Files":"Text";
