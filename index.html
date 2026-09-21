@@ -1343,7 +1343,7 @@ function stubMaps3D(){ class El{ constructor(o){ Object.assign(this,o||{}); this
    Maps 3D has no hover position and no projection API, so the latest point is projected here with a pinhole model of
    Google's camera (center, range, tilt, heading, vertical fov); each real click is used to check the projection error and
    the line is hidden if the model is off by more than a third of the viewport. */
-const PV={ svg:null, mouse:null, err:0, overBox:false };
+const PV={ svg:null, mouse:null, err:0, overBox:false, hover:null };
 function projectLL(q){ if(!map||!map.center) return null; const el=map; const W=el.clientWidth, H=el.clientHeight; if(!W||!H) return null;
   const C=map.center, lat0=C.lat*Math.PI/180; const h=(map.heading||0)*Math.PI/180, t=(map.tilt||0)*Math.PI/180, r=map.range||300, fov=((map.fov||35)*Math.PI/180);
   const enu=p=>[ (p.lng-C.lng)*111320*Math.cos(lat0), (p.lat-C.lat)*111320, (p.altitude??p.alt??0)-(C.altitude||0) ];
@@ -1362,10 +1362,14 @@ function unprojectToPlane(sx,sy,zPlane){ if(!map||!map.center) return null; cons
   const z0=zPlane-(C.altitude||0); if(Math.abs(dir[2])<1e-6) return null; const s=(z0-P[2])/dir[2]; if(s<=0) return null; const e=P[0]+dir[0]*s, n=P[1]+dir[1]*s;
   return { lat:C.lat+n/111320, lng:C.lng+e/(111320*Math.cos(lat0)), ground:zPlane }; }
 function previewInit(){ if(!map||PV.svg||!matchMedia("(pointer:fine)").matches) return; const wrap=$("#canvas-wrap"); const s=document.createElementNS("http://www.w3.org/2000/svg","svg"); s.id="draw-preview"; s.innerHTML=`<line id="pv-line" stroke="#FF6A00" stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/><g id="pv-len"><rect x="-28" y="-11" width="56" height="22" rx="11" fill="rgba(11,15,31,0.6)" stroke="#FF6A00" stroke-dasharray="3 3"/><text y="4" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="11" fill="#fff"></text></g><g id="pv-pin" opacity="0.55"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="#FF6A00" stroke="#0B0F1F" stroke-width="1.6"/><circle cx="13" cy="13" r="4.2" fill="#0B0F1F"/></g>`; wrap.append(s); PV.svg=s;
-  wrap.addEventListener("mousemove",e=>{ const r=map.getBoundingClientRect(); PV.mouse={ x:e.clientX-r.left, y:e.clientY-r.top }; previewDraw(); });
-  wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; previewDraw(); });
+  wrap.addEventListener("mousemove",e=>{ const r=map.getBoundingClientRect(); PV.mouse={ x:e.clientX-r.left, y:e.clientY-r.top }; hoverCheck(); previewDraw(); });
+  wrap.addEventListener("mouseleave",()=>{ PV.mouse=null; if(PV.hover!=null){ PV.hover=null; renderDraw(); } previewDraw(); });
   ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,previewDraw)); }
-function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&PV.mouse&&!PV.overBox&&(!d.closed||d.moving)); s.style.display=show?"block":"none"; if(!show) return;
+/* Hover over a placed point (desktop): Maps 3D has no marker hover, so the points are projected with the same camera model
+   as the preview and the one under the cursor lights up; the next-point preview hides so the pin reads as the target. */
+function hoverCheck(){ const d=V.draw; let h=null; if(d&&PV.mouse&&!PV.overBox&&!d.moving&&PV.err<0.34){ const pinH=36*0.9; let bd=Infinity; d.pts.forEach((p,i)=>{ const s=projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }); if(!s) return; const dx=PV.mouse.x-s.x, dy=PV.mouse.y-(s.y-pinH/2); const dist=Math.hypot(dx,dy*0.8); if(dist<22&&dist<bd){ bd=dist; h=i; } }); }
+  if(h!==PV.hover){ PV.hover=h; renderDraw(); } if(map) map.style.cursor=h!=null?"pointer":""; }
+function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const show=!!(d&&PV.mouse&&!PV.overBox&&PV.hover==null&&(!d.closed||d.moving)); s.style.display=show?"block":"none"; if(!show) return;
   const pin=s.querySelector("#pv-pin"); pin.setAttribute("transform",`translate(${PV.mouse.x-13*0.9},${PV.mouse.y-36*0.9}) scale(0.9)`);
   const line=s.querySelector("#pv-line"), len=s.querySelector("#pv-len"); let extra=s.querySelector("#pv-extra"); if(!extra){ extra=document.createElementNS("http://www.w3.org/2000/svg","g"); extra.id="pv-extra"; s.append(extra); } extra.innerHTML="";
   const anchors=[]; const n=d.pts.length;
@@ -1486,8 +1490,12 @@ function selInsertAt(p){ const d=V.draw; if(!d||d.pts.length<2) return; if(!d.si
 function selCancelMove(){ const d=V.draw; if(!d||!d.moving) return; d.moving=false; renderDraw(); previewDraw(); }
 function selMove(i){ const d=V.draw; if(!d) return; d.sel=i; d.moving=true; renderDraw(); }
 function selRemove(i){ const d=V.draw; if(!d) return; d.pts.splice(i,1); if(d.pts.length<3) d.closed=false; d.sel=d.pts.length?Math.min(Math.max(i-1,0),d.pts.length-1):null; d.moving=false; selChanged(); }   // box snaps back to the previous point
-function selClose(){ const d=V.draw; if(!d||d.pts.length<3||d.closed) return; d.closed=true; d.sel=null; d.moving=false; selChanged(); }
+function selClose(){ const d=V.draw; if(!d||d.pts.length<3||d.closed) return; d.closed=true; d.sel=null; d.moving=false; selChanged(); if(d.primary?.onClose) d.primary.onClose(); }   // creation: a closed loop is the finished job area
 function selCancel(){ const d=V.draw; if(!d) return; clearDraw(); resetMode(); d.onCancel?.({ kind:shapeKindOf(d.initial.points,d.initial.closed), points:d.initial.points, closed:d.initial.closed }); syncPointHandles(); }
+/* point ① while three or more points are down and the loop is open: a ring target that closes the area on click */
+function ringTemplate(hot){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 96 44"); s.setAttribute("width","96"); s.setAttribute("height","44"); const c=hot?"#00FFE5":"#FF6A00";
+  s.innerHTML=`<circle cx="48" cy="22" r="${hot?15:13}" fill="${hot?"rgba(0,255,229,0.35)":"rgba(255,106,0,0.25)"}" stroke="${c}" stroke-width="3"/><circle cx="48" cy="22" r="4" fill="${c}"/><text x="48" y="26.5" text-anchor="middle" font-family="IBM Plex Mono,ui-monospace,Menlo,monospace" font-weight="700" font-size="11" fill="#0B0F1F">1</text><rect x="10" y="0" width="76" height="14" rx="7" fill="${hot?"#fff":"#00FFE5"}"/><text x="48" y="10.5" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="9.5" fill="#0B0F1F">Close area ▾</text>`;
+  const t=document.createElement("template"); t.content.append(s); return t; }
 /* The actions for the latest (or selected) point sit in one HTML box anchored to that point on screen (projected with the
    same camera model as the preview). Being HTML, the box swallows its own clicks — the map never sees them — and while the
    pointer is inside it, placing is paused and the preview hides. Re-anchored on every camera change. */
@@ -1544,9 +1552,9 @@ function renderDraw(){
   const d=V.draw; if(!d) return; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); }
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
   const movingI=d.moving&&d.sel!=null?d.sel:-1;
-  d.pts.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
-    m.append(pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":"#FF6A00",i===movingI?0.7:0.9,undefined,i+1).tpl);
-    m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; selSelect(i); }); map.append(m); OV.draw.push(m); });
+  d.pts.forEach((p,i)=>{ const first=i===0&&canClose&&movingI!==0; const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,first?0.2:0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
+    const hov=PV.hover===i&&i!==movingI; m.append(first?ringTemplate(hov):pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":hov?"#FFB067":"#FF6A00",i===movingI?0.7:hov?1.2:0.9,hov?"#fff":undefined,i+1).tpl);
+    m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; if(first){ selClose(); return; } selSelect(i); }); map.append(m); OV.draw.push(m); });
   const ring=[...d.pts,...(d.closed?[d.pts[0]]:[])];
   if(n>=2&&movingI<0){ const IL=lib.Polyline3DInteractiveElement||lib.Polyline3DElement; const l=new IL({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?7:5, drawsOccludedSegments:true }); l.path=ring.map(p=>atSurf(p,0.8)); l.__seg=true;
     l.addEventListener?.("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving||!e.position) return; selInsertAt({ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 }); }); map.append(l); OV.draw.push(l); }
@@ -1559,7 +1567,7 @@ function renderDraw(){
   $("#draw-acts").hidden=false; $("#draw-done").disabled=d.needClosed&&!d.closed;
   renderHint(); renderActs();
 }
-function clearDraw(){ if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
+function clearDraw(){ PV.hover=null; if(map) map.style.cursor=""; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
 $("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(d.needClosed&&!sh.closed) return; if(sh.kind==="none"&&!d.live){ selCancel(); return; } clearDraw(); resetMode(); d.onDone(sh); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   select3D({ initial:{ points:BOUNDARY(), closed:true }, label:"Site boundary", needClosed:true, site:true, onDone:async sh=>{ S.site={ ...(S.site||{}), boundary:sh.points }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
@@ -1568,7 +1576,7 @@ $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
 /* ---------- job area: the selector with live save; numbered handles when idle ---------- */
 function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } if(S.tab!=="map") setTab("map");
   const before=locShape(w);
-  select3D({ initial:before, label:"Job area", live:true, primary:W(id)?.draft?{ label:"Create job", onClick:()=>finishCreate(), cancelLabel:"Cancel", onCancel:()=>cancelCreate() }:null,
+  select3D({ initial:before, label:"Job area", live:true, primary:W(id)?.draft?{ label:"Create job", onClick:()=>finishCreate(), onClose:()=>finishCreate(), cancelLabel:"Cancel", onCancel:()=>cancelCreate() }:null,
     onChange:sh=>setPoints(id,sh.points,undefined,true,sh.closed),
     onDone:sh=>{ setPoints(id,sh.points,undefined,true,sh.closed); syncPointHandles(); relock(); if(!W(id)?.draft&&JSON.stringify(sh)!==JSON.stringify(before)) log(id, sh.kind==="none"?"cleared the job area":before.kind==="none"?`set the job area (${shapeLabel(sh)})`:`changed the job area (${shapeLabel(sh)})`); if(typeof editLoc!=="undefined"&&editLoc===id){ editLoc=null; renderRecord(); } },
     onCancel:sh=>{ setPoints(id,sh.points,undefined,true,sh.closed); syncPointHandles(); relock(); if(typeof editLoc!=="undefined"&&editLoc===id){ editLoc=null; renderRecord(); } } }); }
