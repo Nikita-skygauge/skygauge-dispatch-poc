@@ -1338,10 +1338,13 @@ const V={ draw:null, placing:null };
    sprite stays on screen. After any batch of marker removals, nudge the heading by a hair and back on the next frame so
    the engine repaints. Skipped while a fly is in progress (its own frames repaint). */
 let redrawT=0;
-let redrawRetry=0;
+let redrawRetry=0, redrawBack=0, redrawSign=1;
+/* The nudge is one-sided and stays for ~400 ms: an immediate revert on the next frame collapses into "no change" in the
+   engine and nothing repaints (seen live: notes lingered until the camera moved). The step back comes later and is itself
+   a second repaint. 0.001° of heading is invisible. */
 function mapRedraw(){ if(!map||redrawT) return; redrawT=requestAnimationFrame(()=>{ redrawT=0;
-  if(typeof flying!=="undefined"&&flying){ clearTimeout(redrawRetry); redrawRetry=setTimeout(mapRedraw,250); return; }   // mid-flight: try again once the camera is free (never drop the repaint)
-  try{ const h=map.heading||0; map.heading=h+0.0005; requestAnimationFrame(()=>{ try{ if(!(typeof flying!=="undefined"&&flying)) map.heading=h; }catch{} }); }catch{} }); }
+  if(typeof flying!=="undefined"&&flying){ clearTimeout(redrawRetry); redrawRetry=setTimeout(mapRedraw,250); return; }
+  try{ const d=0.001*redrawSign; redrawSign=-redrawSign; map.heading=(map.heading||0)+d; clearTimeout(redrawBack); redrawBack=setTimeout(()=>{ try{ if(!(typeof flying!=="undefined"&&flying)) map.heading=(map.heading||0)-d; }catch{} },400); }catch{} }); }
 const BOUNDARY=()=>S.site?.boundary||DEFAULT_BOUNDARY;
 function inPoly(p,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat))&&(p.lng<(b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
 function offset(lat,lng,dx,dy){ return { lat:lat+dy/111320, lng:lng+dx/(111320*Math.cos(lat*Math.PI/180)) }; }
@@ -1464,7 +1467,7 @@ function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o]
   const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.m.remove(); o.pinHidden=true; mapRedraw(); } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; mapRedraw(); if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
-function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
+function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; mapRedraw(); for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
 let flyTok=0; function onFlyEnd(fn){ const tok=++flyTok; const h=()=>{ map.removeEventListener("gmp-animationend",h); if(tok===flyTok) fn(); }; map.addEventListener("gmp-animationend",h); }
