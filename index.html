@@ -121,7 +121,10 @@ gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 #view-wo{display:flex;flex-direction:column;background:var(--ground);transition:margin-right .2s ease}
 #act-box{position:absolute;z-index:6;display:flex;flex-direction:column;gap:6px;padding:8px;border-radius:12px;background:rgba(11,15,31,.82);border:1px solid rgba(255,255,255,.18);box-shadow:0 8px 24px rgba(0,0,0,.35);backdrop-filter:blur(6px)}
 #act-box button{font:600 13px/1 var(--sans,system-ui);padding:9px 14px;border-radius:999px;border:1px solid rgba(11,15,31,.6);cursor:pointer;min-width:104px}
-#act-box .act-done{background:#00FFE5;color:#0B0F1F}#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-undo{background:#3A4270;color:#fff}
+#act-box .act-done{background:#00FFE5;color:#0B0F1F}#act-box .act-move{background:#fff;color:#0B0F1F}#act-box .act-del{background:#FF3B2F;color:#fff}#act-box .act-reopen{background:#3A4270;color:#fff}
+#sel-hint{position:absolute;z-index:6;top:12px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:10px;max-width:calc(100% - 32px);padding:7px 14px;border-radius:999px;background:rgba(11,15,31,.82);border:1px solid rgba(255,255,255,.18);box-shadow:0 6px 18px rgba(0,0,0,.3);backdrop-filter:blur(6px);color:#E6EAF5;font:500 13px/1.2 var(--sans,system-ui);white-space:nowrap;pointer-events:auto}
+#sel-hint[hidden]{display:none}#sel-hint b{color:#fff}#sel-hint button{font:600 12px/1 var(--sans,system-ui);padding:6px 11px;border-radius:999px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:#fff;cursor:pointer}#sel-hint button:hover{background:rgba(255,255,255,.22)}
+@media (max-width:860px){ #sel-hint{top:8px;font-size:12px;white-space:normal;text-align:center} #sel-hint button{min-height:36px} }
 @media (max-width:860px){ #act-box button{min-height:44px;min-width:120px;font-size:14px} }
 #draw-preview{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;display:none}
 /* while the 3D selector is active the mode banner hides; the actions ride on the model instead */
@@ -361,7 +364,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
 <div id="app" hidden>
   <div class="screen" id="view-map">
     <div id="canvas-wrap">
-      <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a job area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm" id="draw-undo">Undo point</button><button class="btn sm primary" id="draw-done">Done ✓</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
+      <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a job area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm primary" id="draw-done">Done ✓</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
       <div id="hud"><button class="btn" data-view="site" title="Recommended framing: the whole site">Site</button><button class="btn" data-view="north">From harbour</button><button class="btn" data-view="plan">Plan</button><button class="btn" id="b-orbit">Orbit</button></div>
       <div id="orbit" hidden title="Drag to rotate · wheel or pinch to zoom"></div>
       <div id="legend"></div>
@@ -1073,7 +1076,7 @@ function renderRecord(){
     </div>
     <section class="ps"><h3 style="cursor:default">Job area <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${P0.length?P(shapeLabel(locShape(w))+(locKindW(w)==="area"&&locHeight(w)>0?" · "+locHeight(w)+" m":"")):`<span style="color:var(--crit)">required — not set</span>`}</span></h3><div class="locbox ${editLoc===w.id?"editing":"compact"}">
       ${editLoc!==w.id?`<div class="acts">${P0.length?`<button class="btn sm" id="l-edit">Edit job area</button><button class="btn sm teal" id="l-fly" style="margin-left:auto">Fly to</button>`:`<span class="hint" style="flex:1">Every job needs a job area — mark it on the model: one point, a line, or close the loop for an area.</span><button class="btn sm primary" id="l-add">＋ Mark job area</button>`}</div>`
-      :`${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${selPt===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">${isMobile()?"Tap":"Click"} the model: one point, more for a line, then point ① to close an area.</div>`}
+      :`${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${V.draw?.sel===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">${isMobile()?"Tap":"Click"} the model: one point, more for a line, then point ① to close an area.</div>`}
       <div class="acts">${locKindW(w)==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m <span class="hint">(0 = flat)</span></label>`:""}
       <button class="btn sm teal" id="l-done" style="margin-left:auto">Done</button></div>`}
     </div></section>
@@ -1126,11 +1129,11 @@ function renderCreate(w){
     <div class="locbox" style="margin-top:12px">
       <div class="eyebrow" style="margin-bottom:6px">${P0.length?"Job area · "+shapeLabel(sh):"Nothing placed yet"}</div>
       ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="${verb} the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:""}
-      <div class="acts" style="margin-top:8px"><button class="btn sm" id="c-undo" ${P0.length?"":"disabled"}>Undo</button>${sh.kind==="line"&&P0.length>=3?`<button class="btn sm teal" id="c-close">Create area</button>`:""}${sh.kind==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}</div>
+      <div class="acts" style="margin-top:8px"><button class="btn sm" id="c-undo" ${P0.length?"":"disabled"}>Remove last point</button>${sh.kind==="line"&&P0.length>=3?`<button class="btn sm teal" id="c-close">Create area</button>`:""}${sh.kind==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}</div>
     </div>
     <div class="create-foot"><button class="btn" id="c-cancel">Cancel</button><button class="btn teal" id="c-create" ${P0.length?"":"disabled"} title="${P0.length?"":"Place at least one point"}">Create Job</button></div>
   </div>`;
-  $("#c-undo").onclick=()=>{ if(V.draw) selUndo(); else { const p=pts(w).slice(); p.pop(); setPoints(w.id,p,undefined,true,locClosed(w)); } };
+  $("#c-undo").onclick=()=>{ if(V.draw){ if(V.draw.pts.length) selRemove(V.draw.pts.length-1); } else { const p=pts(w).slice(); p.pop(); setPoints(w.id,p,undefined,true,locClosed(w)); } };
   $("#c-close")?.addEventListener("click",()=>{ if(V.draw) selClose(); });
   $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(0,+e.target.value||0),true,locClosed(w)));
   $$("#pbody [data-rm]").forEach(b=>b.onclick=()=>{ if(V.draw){ selRemove(+b.dataset.rm); return; } const p=pts(w).slice(); p.splice(+b.dataset.rm,1); setPoints(w.id,p,undefined,true,locClosed(w)); });
@@ -1374,7 +1377,7 @@ function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
   if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); $("#mapgate").hidden=true; $("#loading").hidden=true;
-    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
+    actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, moving:()=>!!V.draw?.moving, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
     requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); }); return; }
   const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
@@ -1438,12 +1441,12 @@ $("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); onFlyEnd(()=>m
 /* ---------- mode bar, placing and drawing ---------- */
 function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; if(isMobile()&&S.open){ if(cls==="draw"||cls==="place") setSheet("peek"); else if($("#peek").dataset.sheet==="peek") setSheet("half"); } md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
 function resetMode(){ if(S.woView&&S.open){ woMode(); return; } $("#site-view").hidden=true; setMode("","Site view",isMobile()?"Tap a pin or an area to open it.":"Click a pin or a job area to open it.",false); }
-$("#mode-exit").onclick=()=>{ const d=V.draw; if(d){ if(d.live){ $("#draw-done").click(); return; } selCancel(); return; } V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; resetMode(); syncPointHandles(); orbitSync(); };
+$("#mode-exit").onclick=()=>{ const d=V.draw; if(d){ if(d.moving){ selCancelMove(); return; } if(d.live){ $("#draw-done").click(); return; } selCancel(); return; } V.placing=null; placePin?.remove(); placePin=null; map?.classList.remove("placing"); selPt=null; resetMode(); syncPointHandles(); orbitSync(); };
 function onMapClick(e){
   if(!e.position) return; const p={ lat:e.position.lat, lng:e.position.lng, ground:Math.round((e.position.altitude||0)*10)/10 }; previewCheck(p);
   if(V.draw){ const d=V.draw; if(PV.overBox) return; if(!d.site&&!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; }
-    if(d.moving&&d.sel!=null){ d.pts[d.sel]={ ...d.pts[d.sel], ...p }; d.moving=false; d.sel=null; selChanged(); return; }
-    if(d.closed){ toast("The area is closed — Undo reopens it, or press Done.",true); return; }
+    if(d.moving&&d.sel!=null){ d.pts[d.sel]={ ...d.pts[d.sel], ...p }; d.moving=false; selChanged(); return; }   // stays selected: the box comes back on the moved point
+    if(d.closed){ toast("The area is closed — Reopen it to add corners, or press Done.",true); return; }
     d.pts.push(p); d.sel=null; selChanged(); return; }
   if(V.placing){ if(!inPoly(p,BOUNDARY())){ toast("Outside the site boundary.",true); return; } const pl=V.placing; V.placing=null; map.classList.remove("placing"); resetMode(); pl.onPlace(p); orbitSync(); }
 }
@@ -1452,8 +1455,10 @@ function onMapClick(e){
    The one tool for putting a shape on the model. Job areas, notes on the model and the site boundary all run through it,
    so they behave the same and change together.
      click the model → a point · more clicks → a line through them · click point ① (the ring) → the loop closes into an area
-     Undo walks back one step (reopens a closed loop, else removes the last point) · Done hands the shape to the caller
-     click a placed point → Move (next click on the model relocates it) or Remove
+     the action box rides on the selected (else latest) point: Done · Move · Delete · Reopen (closed loop only)
+     Move: the next click on the model relocates the point (Cancel move in the hint pill, or Escape); the box then stays on it
+     Delete: the box snaps back to the previous point · Done hands the shape to the caller and leaves the selector;
+     clicking any point of the saved shape re-enters it with that point selected
    select3D({ initial:{points,closed}, label, live, needClosed, site, onChange(shape), onDone(shape), onCancel(initialShape) })
    shape = { kind:"none"|"point"|"line"|"area", points:[{lat,lng,ground}], closed } — every point keeps the surface altitude it was clicked at. */
 const cp=p=>({ lat:p.lat, lng:p.lng, ...(p.ground!=null?{ground:p.ground}:{}) });
@@ -1468,28 +1473,42 @@ function select3D(opts){
   map.classList.add("drawing"); renderDraw(); return true;
 }
 function selChanged(){ const d=V.draw; if(!d) return; renderDraw(); previewDraw(); d.onChange?.(shapeOf(d)); }
-function selSelect(i){ const d=V.draw; if(!d) return; d.moving=false; d.sel=d.sel===i?null:i; renderDraw(); }
+function selSelect(i){ const d=V.draw; if(!d) return; d.moving=false; d.sel=i; renderDraw(); }
+function selReopen(){ const d=V.draw; if(!d||!d.closed) return; d.closed=false; d.sel=d.pts.length-1; selChanged(); }
+function selCancelMove(){ const d=V.draw; if(!d||!d.moving) return; d.moving=false; renderDraw(); previewDraw(); }
 function selMove(i){ const d=V.draw; if(!d) return; d.sel=i; d.moving=true; renderDraw(); }
 function selRemove(i){ const d=V.draw; if(!d) return; d.pts.splice(i,1); if(d.pts.length<3) d.closed=false; d.sel=d.pts.length?Math.min(Math.max(i-1,0),d.pts.length-1):null; d.moving=false; selChanged(); }   // box snaps back to the previous point
 function selClose(){ const d=V.draw; if(!d||d.pts.length<3||d.closed) return; d.closed=true; d.sel=null; d.moving=false; selChanged(); }
-function selUndo(){ const d=V.draw; if(!d) return; if(d.moving){ d.moving=false; d.sel=null; renderDraw(); return; } if(d.closed){ d.closed=false; } else { d.pts.pop(); } d.sel=null; selChanged(); }
 function selCancel(){ const d=V.draw; if(!d) return; clearDraw(); resetMode(); d.onCancel?.({ kind:shapeKindOf(d.initial.points,d.initial.closed), points:d.initial.points, closed:d.initial.closed }); syncPointHandles(); }
 /* point ① while the loop is open: a ring target; with three or more points it also carries the "Create area" label */
-function ringTemplate(active){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 96 44"); s.setAttribute("width","96"); s.setAttribute("height","44");
-  s.innerHTML=`<circle cx="48" cy="22" r="13" fill="rgba(255,106,0,0.25)" stroke="#FF6A00" stroke-width="3"/><circle cx="48" cy="22" r="4" fill="#FF6A00"/><text x="48" y="26.5" text-anchor="middle" font-family="IBM Plex Mono,ui-monospace,Menlo,monospace" font-weight="700" font-size="11" fill="#0B0F1F">1</text>${active?`<rect x="10" y="0" width="76" height="14" rx="7" fill="#00FFE5"/><text x="48" y="10.5" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="9.5" fill="#0B0F1F">Create area ▾</text>`:""}`;
+function ringTemplate(active,selected){ const NS="http://www.w3.org/2000/svg", s=document.createElementNS(NS,"svg"); s.setAttribute("viewBox","0 0 96 44"); s.setAttribute("width","96"); s.setAttribute("height","44"); const c=selected?"#00FFE5":"#FF6A00";
+  s.innerHTML=`<circle cx="48" cy="22" r="13" fill="${selected?"rgba(0,255,229,0.3)":"rgba(255,106,0,0.25)"}" stroke="${c}" stroke-width="3"/><circle cx="48" cy="22" r="4" fill="${c}"/><text x="48" y="26.5" text-anchor="middle" font-family="IBM Plex Mono,ui-monospace,Menlo,monospace" font-weight="700" font-size="11" fill="#0B0F1F">1</text>${active?`<rect x="10" y="0" width="76" height="14" rx="7" fill="#00FFE5"/><text x="48" y="10.5" text-anchor="middle" font-family="Inter,system-ui,sans-serif" font-weight="700" font-size="9.5" fill="#0B0F1F">Create area ▾</text>`:""}`;
   const t=document.createElement("template"); t.content.append(s); return t; }
 /* The actions for the latest (or selected) point sit in one HTML box anchored to that point on screen (projected with the
    same camera model as the preview). Being HTML, the box swallows its own clicks — the map never sees them — and while the
    pointer is inside it, placing is paused and the preview hides. Re-anchored on every camera change. */
-const ACT_DEFS=[ ["done","Done ✓","act-done"], ["move","Move","act-move"], ["delete","Delete","act-del"] ];
+const ACT_DEFS=[ ["done","Done ✓","act-done"], ["move","Move","act-move"], ["delete","Delete","act-del"], ["reopen","Reopen loop","act-reopen"] ];
 let ACTBOX=null;
 function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap) return; const box=document.createElement("div"); box.id="act-box"; box.hidden=true; wrap.append(box); ACTBOX=box;
   box.addEventListener("pointerenter",()=>{ PV.overBox=true; if(PV.svg) PV.svg.style.display="none"; }); box.addEventListener("pointerleave",()=>{ PV.overBox=false; previewDraw(); });
   box.addEventListener("click",e=>{ const bt=e.target.closest("[data-act]"); if(!bt) return; e.stopPropagation(); const d=V.draw; if(!d) return; const i=d.sel!=null?d.sel:d.pts.length-1; const key=bt.dataset.act;
-    if(key==="done") $("#draw-done").click(); else if(key==="move") selMove(i); else if(key==="delete") selRemove(i); else if(key==="cancel") $("#mode-exit").click(); else selUndo(); });
+    if(key==="done") $("#draw-done").click(); else if(key==="move") selMove(i); else if(key==="delete") selRemove(i); else if(key==="reopen") selReopen(); });
   ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map?.addEventListener(ev,placeActBox)); }
+/* Hint pill: one slim line at the top of the map while the selector is open — what the next click does, plus the one
+   escape hatch the action box cannot carry (Cancel move; Cancel when there is nothing placed yet). */
+let HINT=null;
+function renderHint(){ const wrap=$("#canvas-wrap"); if(!wrap) return; if(!HINT){ HINT=document.createElement("div"); HINT.id="sel-hint"; wrap.append(HINT); HINT.addEventListener("click",e=>{ const b=e.target.closest("[data-hint]"); if(!b) return; e.stopPropagation(); if(b.dataset.hint==="cancel-move") selCancelMove(); else if(b.dataset.hint==="cancel") selCancel(); else if(b.dataset.hint==="done") $("#draw-done").click(); }); }
+  const d=V.draw; if(!d){ HINT.hidden=true; return; } const n=d.pts.length, verb=isMobile()?"Tap":"Click", sh=shapeKindOf(d.pts,d.closed);
+  let txt, btn="";
+  if(d.moving&&d.sel!=null){ txt=`${verb} the model where point <b>${d.sel+1}</b> goes`; btn=`<button type="button" data-hint="cancel-move">Cancel move</button>`; }
+  else if(n===0){ txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb.toLowerCase()} the model to start again`:`${verb} the model to place the first point`; btn=d.live?`<button type="button" data-hint="done">Done</button>`:`<button type="button" data-hint="cancel">Cancel</button>`; }
+  else if(d.closed) txt=`Area · <b>${n}</b> corners${d.live?" · saved":""}`;
+  else if(n>=3) txt=`${verb} point ① to close the area, or keep adding`;
+  else if(d.needClosed) txt=`An area needs three corners, then close the loop`;
+  else txt=`${sh==="point"?"Point":"Line · "+n+" points"}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add`;
+  HINT.innerHTML=`<span>${txt}</span>${btn}`; HINT.hidden=false; }
 function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) return; if(!d||!d.pts.length||d.moving){ box.hidden=true; PV.overBox=false; return; }
-  const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&d.needClosed&&!d.closed));
+  const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&d.needClosed&&!d.closed)&&!(k==="reopen"&&!d.closed));
   box.innerHTML=defs.map(([k,l,cls])=>`<button type="button" class="${cls}" data-act="${k}">${l}</button>`).join(""); box.hidden=false; placeActBox(); }
 function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length||PV.overBox) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
   const s=(PV.err<0.34)?projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }):null; const bw=box.offsetWidth||120, bh=box.offsetHeight||44;
@@ -1510,7 +1529,7 @@ function renderDraw(){
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
   const movingI=d.moving&&d.sel!=null?d.sel:-1;
   d.pts.forEach((p,i)=>{ const first=i===0&&!d.closed&&n>1; const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,first?0.2:0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
-    m.append(first?ringTemplate(canClose):pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":"#FF6A00",i===movingI?0.7:0.9,undefined,i+1).tpl);
+    m.append(first?ringTemplate(canClose,d.sel===0):pinTemplate(i===movingI?"#8A93AD":d.sel===i?"#00FFE5":"#FF6A00",i===movingI?0.7:0.9,undefined,i+1).tpl);
     m.addEventListener("gmp-click",e=>{ e.stopPropagation?.(); if(d.moving) return; if(first&&canClose){ selClose(); return; } selSelect(i); }); map.append(m); OV.draw.push(m); });
   const ring=[...d.pts,...(d.closed?[d.pts[0]]:[])];
   if(n>=2&&movingI<0){ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=ring.map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }
@@ -1519,22 +1538,12 @@ function renderDraw(){
     runs.forEach(r=>{ const l=new lib.Polyline3DElement({ altitudeMode:dm, strokeColor:"rgba(255,106,0,0.95)", strokeWidth:sh==="line"?5:3, drawsOccludedSegments:true }); l.path=r.map(p=>atSurf(p,0.8)); map.append(l); OV.draw.push(l); }); }
   if(d.closed&&n>=3){ const g=new lib.Polygon3DElement({ altitudeMode:dm, fillColor:"rgba(255,106,0,0.22)", strokeColor:"rgba(255,106,0,0.9)", strokeWidth:1.5, drawsOccludedSegments:true }); g.path=[...d.pts,d.pts[0]].map(p=>atSurf(p,0.8)); map.append(g); OV.draw.push(g); }
   if(movingI<0) OV.draw.push(...segmentLabels(d.pts,d.closed)); else { const rest=d.pts.filter((_,i)=>i!==movingI); /* labels only on segments not touching the moving point */ const segs=[]; for(let i=0;i<d.pts.length-1+(d.closed?1:0);i++){ const a=i, c=(i+1)%d.pts.length; if(a!==movingI&&c!==movingI) segs.push([d.pts[a],d.pts[c]]); } segs.forEach(([a,c])=>OV.draw.push(...segmentLabels([a,c],false))); }
-  const verb=isMobile()?"Tap":"Click", kindTxt={ none:"nothing yet", point:"a point", line:"a line", area:"an area" }[sh];
-  let txt;
-  if(d.moving&&d.sel!=null) txt=`${verb} the model where point <b>${d.sel+1}</b> should be.`;
-  else if(d.sel!=null) txt=`Point <b>${d.sel+1}</b> of ${n} · <button class="btn sm" id="sel-mv">Move</button> <button class="btn sm danger" id="sel-rm">Remove</button>`;
-  else if(n===0) txt=`${verb} the model to place the first point.`;
-  else if(d.closed) txt=`<b>${n}</b> corners → ${kindTxt}${d.live?" · saved":""} · Undo reopens the loop`;
-  else if(canClose) txt=`<b>${n}</b> points → ${kindTxt}${d.live?" · saved":""} · ${verb.toLowerCase()} point ① to <b>create an area</b>, or keep adding`;
-  else txt=`<b>${n}</b> point${n===1?"":"s"} → ${kindTxt}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add${d.needClosed?" (an area needs three, then close the loop)":""}`;
-  setMode("draw",d.label,txt,true); document.body.classList.add("drawing");
-  $("#sel-mv")?.addEventListener("click",()=>selMove(d.sel)); $("#sel-rm")?.addEventListener("click",()=>selRemove(d.sel));
-  $("#draw-acts").hidden=false; $("#draw-done").disabled=n<1||(d.needClosed&&!d.closed); $("#draw-undo").disabled=!n&&!d.moving;
-  renderActs();
+  setMode("draw",d.label,"",true); document.body.classList.add("drawing");
+  $("#draw-acts").hidden=false; $("#draw-done").disabled=d.needClosed&&!d.closed;
+  renderHint(); renderActs();
 }
-function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; if(ACTBOX){ ACTBOX.hidden=true; } PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
-$("#draw-undo").onclick=selUndo;
-$("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(sh.kind==="none"||(d.needClosed&&!sh.closed)) return; clearDraw(); resetMode(); d.onDone(sh); };
+function clearDraw(){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
+$("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(d.needClosed&&!sh.closed) return; if(sh.kind==="none"&&!d.live){ selCancel(); return; } clearDraw(); resetMode(); d.onDone(sh); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   select3D({ initial:{ points:BOUNDARY(), closed:true }, label:"Site boundary", needClosed:true, site:true, onDone:async sh=>{ S.site={ ...(S.site||{}), boundary:sh.points }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
   fly({ center:{lat:siteGeom().c.lat,lng:siteGeom().c.lng,altitude:0}, range:siteGeom().range*1.05, tilt:0, heading:0 }); };
