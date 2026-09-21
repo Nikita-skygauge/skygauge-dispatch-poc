@@ -97,6 +97,9 @@ gmp-map-3d.placing,gmp-map-3d.drawing{cursor:crosshair}
 #orbit{position:absolute;inset:0;z-index:5;cursor:grab;touch-action:none;background:transparent}#orbit.drag{cursor:grabbing}
 #hud{position:absolute;left:12px;bottom:12px;display:flex;gap:6px;flex-wrap:wrap;z-index:6}
 #hud .btn{box-shadow:var(--shadow)}
+#pivot-hint{cursor:default;user-select:none;transition:background .15s,color .15s,border-color .15s}#pivot-hint .on{display:none}#pivot-hint b{font-weight:700}
+body.pivot #pivot-hint{background:#00FFE5;color:#0B0F1F;border-color:#00FFE5}body.pivot #pivot-hint .k{display:none}body.pivot #pivot-hint .on{display:inline}
+@media (pointer:coarse){ #pivot-hint{display:none} }
 #mode{position:absolute;left:12px;top:12px;z-index:8;display:flex;align-items:center;gap:10px;padding:6px 8px 6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel);box-shadow:var(--shadow);font-size:12px;color:var(--ink-2);max-width:min(92%,620px);flex-wrap:wrap}
 #mode .mode-tag{font-family:var(--mono);font-weight:600;font-size:11px;letter-spacing:.08em;text-transform:uppercase;padding:2px 8px;border-radius:5px;background:var(--panel-2);color:var(--ink);white-space:nowrap}
 #mode.place .mode-tag,#mode.draw .mode-tag{background:#FF6A00;color:#fff}
@@ -326,7 +329,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
   #draw-acts{position:fixed;left:12px;right:12px;bottom:calc(var(--sheet-peek) + 12px);z-index:40;display:flex!important;gap:10px;justify-content:stretch}
   #draw-acts[hidden]{display:none!important} #draw-acts .btn{flex:1;min-height:52px;font-size:15px;font-weight:600;box-shadow:var(--shadow)}
   body:not(.wo-view) #draw-acts{bottom:76px}
-  #hud{left:auto;right:8px;top:auto;bottom:calc(76px + var(--sab));flex-direction:column;gap:6px} body.wo-view #hud{display:none} #hud [data-view="north"],#hud [data-view="plan"]{display:none}
+  #hud{left:auto;right:8px;top:auto;bottom:calc(76px + var(--sab));flex-direction:column;gap:6px} body.wo-view #hud{display:none}
   #legend{display:none}
   /* the map container ends where the sheet begins, so the camera centre (the job) sits in the visible area */
   #canvas-wrap{bottom:calc(64px + var(--sab))} body.wo-view #canvas-wrap{bottom:var(--sheet-half)} body.wo-view[data-sheet="peek"] #canvas-wrap{bottom:var(--sheet-peek)} body.wo-view[data-sheet="full"] #canvas-wrap{bottom:var(--sheet-half)}
@@ -372,7 +375,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
   <div class="screen" id="view-map">
     <div id="canvas-wrap">
       <div id="mode"><span class="mode-tag">Site view</span><span class="mode-txt">Click a pin or a job area to open it.</span><span id="draw-acts" hidden style="display:flex;gap:6px"><button class="btn sm primary" id="draw-done">Done ✓</button></span><button class="btn sm" id="mode-exit" hidden>✕ Cancel</button><button class="btn sm teal" id="site-view" hidden>Site view</button></div>
-      <div id="hud"><button class="btn" data-view="site" title="Recommended framing: the whole site">Site</button><button class="btn" data-view="north">From harbour</button><button class="btn" data-view="plan">Plan</button><button class="btn" id="b-orbit">Orbit</button></div>
+      <div id="hud"><div class="btn" id="pivot-hint" title="Hold Shift and drag to rotate and tilt the view"><span class="k">Hold <b>Shift</b> to pivot</span><span class="on">Pivot mode</span></div></div>
       <div id="orbit" hidden title="Drag to rotate · wheel or pinch to zoom"></div>
       <div id="legend"></div>
       <div id="loading"><div>Loading photorealistic 3D…</div><div class="bar"><i></i></div></div>
@@ -394,7 +397,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
       <div class="sub" role="tablist"><button aria-selected="true" data-sub="wo">Jobs</button><button aria-selected="false" data-sub="assets">Assets</button></div>
       <div id="tree"></div>
       <div class="reg-cta"><button class="btn primary" id="new-wo-map">＋ New job</button></div>
-      <div class="foot">Standard Google 3D controls: drag to pan · right-drag or Ctrl-drag to rotate and tilt · wheel or pinch to zoom.<br>
+      <div class="foot">Standard Google 3D controls: drag to pan · hold Shift (or right-drag) to pivot — rotate and tilt · wheel or pinch to zoom.<br>
         <button class="link" id="new-asset">＋ Asset</button> · <button class="link" id="edit-site">Site boundary</button></div>
     </aside>
     <div id="peek-slot" hidden></div>
@@ -1452,8 +1455,10 @@ function flyWO(w){ const P=pts(w); if(!P.length||!map) return;
   flying=true; LOCK=S.woView?{ ...cam.center }:null; orbitSync(); map.flyCameraTo({ endCamera:cam, durationMillis:1600 });
   clearTimeout(flyT); const done=()=>{ flying=false; if(S.woView&&S.open===w.id){ const c=map.center; const off=c?Math.hypot((c.lat-cam.center.lat)*111320,(c.lng-cam.center.lng)*111320*Math.cos(cam.center.lat*Math.PI/180)):1e9; if(off>25||Math.abs((map.range||0)-cam.range)>cam.range*0.5){ map.center=cam.center; map.range=cam.range; map.tilt=cam.tilt; map.heading=cam.heading; } } orbitSync(); }; const tok0=flyTok+1; flyT=setTimeout(()=>{ if(tok0===flyTok) done(); },1750); onFlyEnd(done);
 }
-$$("#hud [data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view, g=siteGeom(); if(v==="site") fly(siteCam()); if(v==="north") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*0.95, tilt:60, heading:170 }); if(v==="plan") fly({ center:{lat:g.c.lat,lng:g.c.lng,altitude:0}, range:g.range*1.05, tilt:0, heading:0 }); });
-$("#b-orbit").onclick=()=>{ if(!map) return; fly(siteCam(),1500); onFlyEnd(()=>map.flyCameraAround({ camera:siteCam(), durationMillis:45000, rounds:1 })); };
+/* pivot hint: the badge flips to "Pivot mode" while Shift is held (Shift-drag rotates and tilts the 3D view) */
+document.addEventListener("keydown",e=>{ if(e.key==="Shift") document.body.classList.add("pivot"); });
+document.addEventListener("keyup",e=>{ if(e.key==="Shift") document.body.classList.remove("pivot"); });
+window.addEventListener("blur",()=>document.body.classList.remove("pivot"));
 
 /* ---------- mode bar, placing and drawing ---------- */
 function setMode(cls,tag,txt,exit){ const md=$("#mode"); md.className=cls; $("#site-view").hidden=!S.woView; if(isMobile()&&S.open){ if(cls==="draw"||cls==="place") setSheet("peek"); else if($("#peek").dataset.sheet==="peek") setSheet("half"); } md.querySelector(".mode-tag").textContent=tag; md.querySelector(".mode-txt").innerHTML=txt; $("#mode-exit").hidden=!exit; if(cls!=="draw") $("#draw-acts").hidden=true; }
@@ -1632,7 +1637,7 @@ let LOCK=null, flying=false, flyT=null;
 function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); syncPhotoOverlays(); syncPinOverlays(); syncJobLabels();
   // fly only after the map has its final size: an animation started on a hidden or resizing map is dropped by the engine
   if(map){ requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>flyWO(w), (isMobile()||wasHidden)?320:60))); } }
-function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); syncJobLabels(); setTimeout(mapRedraw,350); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
+function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); syncJobLabels(); setTimeout(mapRedraw,350); setTimeout(mapRedraw,1200); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
 function woMode(){ const w=W(S.open); if(!w) return; setMode("wo","Job",isMobile()?`<b>${w.id}</b> · double-tap the map to re-centre`:`<b>${w.id}</b> · standard Google controls · double-click the map to re-centre`,false); }
 function orbitSync(){ $("#orbit").hidden=true; }   // stock Google 3D gestures everywhere; no custom control layer
 function installLock(){ return;
