@@ -790,7 +790,7 @@ function flashSaved(el,run){   // run: a function that starts the write — the 
 }
 async function trashWO(id){ const w=W(id); if(!w) return; w.trashed=true; w.trashedAt=now(); refreshWOOverlay(w); if(S.open===id){ if(S.woView) exitWOView(); else closePeek(); } renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:true, trashedAt:now(), ...stamp() }); log(id,"moved to Trash"); toast(`${id} moved to Trash · <button class="link" id="undo-t">Undo</button>`); $("#undo-t")?.addEventListener("click",()=>restoreWO(id)); }
 async function restoreWO(id){ const w=W(id); if(!w) return; w.trashed=false; w.trashedAt=null; refreshWOOverlay(w); renderAll(); await DB.update(WO_COL+"/"+id,{ trashed:false, trashedAt:null, ...stamp() }); log(id,"restored from Trash"); }
-async function purgeWO(id){ const o=OV.wo[id]; if(o){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; mapRedraw(); } await DB.del(WO_COL+"/"+id); }
+async function purgeWO(id){ const o=OV.wo[id]; if(o){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); delete OV.wo[id]; mapRedraw(); } await DB.del(WO_COL+"/"+id); }
 function purgeTrash(){ const cut=Date.now()-30*86400000; trashed().filter(w=>w.trashedAt&&new Date(w.trashedAt)<cut).forEach(w=>purgeWO(w.id)); const dcut=Date.now()-86400000; S.wos.filter(w=>w.draft&&S.creating!==w.id&&w.createdBy?.uid===S.user.uid&&new Date(w.created)<dcut).forEach(w=>purgeWO(w.id)); }
 async function duplicateWO(id){ const w=W(id); if(!w) return; const nid=await createWO({ title:(w.title||"Untitled")+" (copy)", statusId:w.statusId, values:structuredClone(w.values||{}), location:structuredClone(w.location) }); openWO(nid); }
 async function saveSchema(){ S.schema.version=(S.schema.version||1); await DB.set("workspace/schema",S.schema); renderAll(); }
@@ -1342,6 +1342,12 @@ let redrawRetry=0, redrawBack=0, redrawSign=1;
 /* The nudge is one-sided and stays for ~400 ms: an immediate revert on the next frame collapses into "no change" in the
    engine and nothing repaints (seen live: notes lingered until the camera moved). The step back comes later and is itself
    a second repaint. 0.001° of heading is invisible. */
+/* Maps 3D (beta) sometimes keeps drawing a marker after it is removed from the DOM — seen live after a rebuild-heavy
+   sequence (hover → note → exit mid-flight); no camera change clears it, and the app holds no reference any more. So an
+   element is never just removed: first it is buried (moved 5 km underground, occlusion drawing off) while still attached —
+   property changes on attached elements are reliable — and removed a frame later. A leaked object is then invisible. */
+function killEl(x){ if(!x) return; try{ if(x.position){ x.drawsWhenOccluded=false; const p=x.position; x.altitudeMode="ABSOLUTE"; x.position={ lat:p.lat, lng:p.lng, altitude:-5000 }; } else if("path" in x){ try{ x.drawsOccludedSegments=false; }catch{} try{ x.path=[]; }catch{} } }catch{} setTimeout(()=>{ try{ x.remove(); }catch{} },90); }
+function killAll(a){ (a||[]).forEach(killEl); }
 function mapRedraw(){ if(!map||redrawT) return; redrawT=requestAnimationFrame(()=>{ redrawT=0;
   if(typeof flying!=="undefined"&&flying){ clearTimeout(redrawRetry); redrawRetry=setTimeout(mapRedraw,250); return; }
   try{ const d=0.001*redrawSign; redrawSign=-redrawSign; map.heading=(map.heading||0)+d; clearTimeout(redrawBack); redrawBack=setTimeout(()=>{ try{ if(!(typeof flying!=="undefined"&&flying)) map.heading=(map.heading||0)-d; }catch{} },400); }catch{} }); }
@@ -1439,11 +1445,11 @@ async function initMap(){
   requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); });
 }
 function applyCameraLimits(){ if(!map) return; const c=siteCam(); map.flyCameraTo({ endCamera:c, durationMillis:1200 }); const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
-function drawSite(){ if(!map) return; OV.site?.remove(); const B=BOUNDARY(); const line=new lib.Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true }); line.path=[...B,B[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(line); OV.site=line; }
+function drawSite(){ if(!map) return; killEl(OV.site); const B=BOUNDARY(); const line=new lib.Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true }); line.path=[...B,B[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(line); OV.site=line; }
 function syncAssetOverlays(){ /* assets carry no location (register only) */ }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
 function woColor(w){ return col(status(w.statusId)?.color).map; }
-function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ OV.wo[id].m?.remove(); OV.wo[id].area?.remove(); OV.wo[id].line?.remove(); OV.wo[id].box?.remove(); (OV.wo[id].labels||[]).forEach(x=>x.remove()); delete OV.wo[id]; mapRedraw(); } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
+function syncOverlays(){ if(!map||!lib) return; Object.keys(OV.wo).forEach(id=>{ const w=W(id); if(!w||w.trashed||!pts(w).length){ const o=OV.wo[id]; killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); delete OV.wo[id]; mapRedraw(); } }); live().forEach(w=>{ if(OV.wo[w.id]) refreshWOOverlay(w); else addWOOverlay(w); }); renderLegend(); }
 /* Points stay where they were clicked on the model (roof, platform, shell) instead of dropping to the ground: each point
    stores the surface altitude `ground` from the click, and overlays use ABSOLUTE altitude from it. Legacy points without
    it fall back to RELATIVE_TO_MESH, which also sits on the surface. */
@@ -1463,11 +1469,11 @@ function addWOOverlay(w){
   OV.wo[w.id]=o; applyLegendTo(w); syncJobLabels();   // lengths / pin visibility follow the open state
 }
 /* segment lengths belong to the open job only: strip them from every other job, add them to the open one */
-function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ o.labels.forEach(x=>x.remove()); o.labels=[]; mapRedraw(); } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
-  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.m.remove(); o.pinHidden=true; mapRedraw(); } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
+function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ killAll(o.labels); o.labels=[]; mapRedraw(); } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
+  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.pinPos=o.m.position; o.pinMode=o.m.altitudeMode; o.m.altitudeMode="ABSOLUTE"; o.m.position={ lat:o.pinPos.lat, lng:o.pinPos.lng, altitude:-5000 }; o.pinHidden=true; mapRedraw(); } else if(!hidePin&&o.pinHidden){ o.m.altitudeMode=o.pinMode; o.m.position=o.pinPos; o.pinHidden=false; mapRedraw(); } } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
-function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; mapRedraw(); if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
-function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; mapRedraw(); for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
+function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); delete OV.wo[w.id]; mapRedraw(); if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
+function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(hide&&!o.hidden){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); o.hidden=true; mapRedraw(); } else if(!hide&&o.hidden){ delete OV.wo[w.id]; addWOOverlay(w); } }   // legend off: parts are buried and dropped; back on: rebuilt
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
 let flyTok=0; function onFlyEnd(fn){ const tok=++flyTok; const h=()=>{ map.removeEventListener("gmp-animationend",h); if(tok===flyTok) fn(); }; map.addEventListener("gmp-animationend",h); }
@@ -1591,7 +1597,7 @@ function segmentLabels(P,closed){ const out=[]; if(!map||!lib||P.length<2) retur
     const m=new lib.Marker3DElement({ position:atSurf(mid,1.6), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); m.append(distLabelTemplate(fmtDist(dist3(a,c)))); map.append(m); out.push(m); }
   return out; }
 function renderDraw(){
-  const d=V.draw; if(!d) return; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); }
+  const d=V.draw; if(!d) return; if(OV.draw.length){ killAll(OV.draw); OV.draw=[]; mapRedraw(); }
   const n=d.pts.length, dm=surf(d.pts), canClose=n>=3&&!d.closed, sh=shapeKindOf(d.pts,d.closed);
   const movingI=d.moving&&d.sel!=null?d.sel:-1;
   d.pts.forEach((p,i)=>{ const first=i===0&&canClose&&movingI!==0; const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,first?0.2:0.8), altitudeMode:dm, sizePreserved:true, drawsWhenOccluded:true });
@@ -1609,7 +1615,7 @@ function renderDraw(){
   $("#draw-acts").hidden=false; $("#draw-done").disabled=d.needClosed&&!d.closed;
   renderHint(); renderActs();
 }
-function clearDraw(){ PV.hover=null; PV.seg=null; if(map) map.style.cursor=""; if(OV.draw.length){ OV.draw.forEach(x=>x.remove()); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
+function clearDraw(){ PV.hover=null; PV.seg=null; if(map) map.style.cursor=""; if(OV.draw.length){ killAll(OV.draw); OV.draw=[]; mapRedraw(); } if(ACTBOX){ ACTBOX.hidden=true; } if(HINT) HINT.hidden=true; PV.overBox=false; V.draw=null; if(PV.svg) PV.svg.style.display="none"; map?.classList.remove("drawing"); document.body.classList.remove("drawing"); $("#draw-acts").hidden=true; orbitSync(); }
 $("#draw-done").onclick=()=>{ const d=V.draw; if(!d) return; const sh=shapeOf(d); if(d.needClosed&&!sh.closed) return; if(sh.kind==="none"&&!d.live){ selCancel(); return; } clearDraw(); resetMode(); d.onDone(sh); };
 $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
   select3D({ initial:{ points:BOUNDARY(), closed:true }, label:"Site boundary", needClosed:true, site:true, onDone:async sh=>{ S.site={ ...(S.site||{}), boundary:sh.points }; await DB.set("workspace/site",S.site,true); drawSite(); applyCameraLimits(); toast("Site boundary saved for everyone."); } });
@@ -1634,7 +1640,7 @@ function selectPoint(i,flyTo){ const id=S.open; const w=W(id); if(!w||!map) retu
   if(flyTo){ const p=d.pts[i]; fly({ center:{lat:p.lat,lng:p.lng,altitude:(p.ground??GROUND_FALLBACK)+2}, range:90, tilt:60, heading:map.heading },900); } }
 /* numbered handles for the open record's points while nothing is being edited; click → selector with that point selected */
 const PTH=[];
-function clearPointHandles(){ if(PTH.length){ PTH.forEach(x=>x.remove()); PTH.length=0; mapRedraw(); } }
+function clearPointHandles(){ if(PTH.length){ killAll(PTH); PTH.length=0; mapRedraw(); } }
 function syncPointHandles(){ clearPointHandles(); if(!map||!lib||!S.open||V.draw) return; const w=W(S.open); if(!w) return; const P=pts(w); if(P.length<1) { if(!V.placing) resetMode(); return; }
   const mode=surf(P); P.forEach((p,i)=>{ const m=new lib.Marker3DInteractiveElement({ position:atSurf(p,P.length===1?(p.alt||0)+0.5:0.8), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); const focus=(typeof hoverPin!=="undefined"&&hoverPin)||(S.note||null); m.append(pinTemplate(focus?"#8A93AD":"#FF6A00",focus?0.7:0.85,undefined,i+1).tpl); m.addEventListener("gmp-click",e=>{ if(V.draw||V.placing) return; e.stopPropagation?.(); selectPoint(i); }); map.append(m); PTH.push(m); });
   if(!V.placing) resetMode(); }
@@ -1910,8 +1916,8 @@ function camSvg(fill,scale=1){ const NS="http://www.w3.org/2000/svg", s=document
 function syncPhotoOverlays(){
   if(!map||!lib) return; if(!S.woView||!S.open){ clearPhotoOverlays(); return; }   // a job's photos and notes show only inside that job's view
   const want=new Set(PH.filter(hasPos).map(p=>p.id));
-  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ PHOV[id].m.remove(); PHOV[id].sight?.forEach(x=>x.remove()); delete PHOV[id]; mapRedraw(); } });
-  PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e)+(PHOV[p.id]?.hl?"#":""); const o=PHOV[p.id]; if(o&&o.sig===sig) return; o?.m.remove(); o?.sight?.forEach(x=>x.remove());
+  Object.keys(PHOV).forEach(id=>{ if(!want.has(id)){ killEl(PHOV[id].m); killAll(PHOV[id].sight); delete PHOV[id]; mapRedraw(); } });
+  PH.filter(hasPos).forEach(p=>{ const e=effPose(p); const sig=JSON.stringify(e)+(PHOV[p.id]?.hl?"#":""); const o=PHOV[p.id]; if(o&&o.sig===sig) return; if(o){ killEl(o.m); killAll(o.sight); }
     const fill=o?.hl?"#00FFE5":"#B9C2DA";   // grey by default; teal when hovered or open
     // the icon sits on the surface the photo was placed on (roof, platform…), not on the ground under it
     const m=new lib.Marker3DInteractiveElement({ position:{ lat:e.lat, lng:e.lng, altitude:e.ground!=null?e.ground+0.6:1.2 }, altitudeMode:e.ground!=null?"ABSOLUTE":"RELATIVE_TO_MESH", sizePreserved:true, drawsWhenOccluded:true }); m.append(tpl(camSvg(fill,o?.hl?1.35:1)));
@@ -1919,7 +1925,7 @@ function syncPhotoOverlays(){
     PHOV[p.id]={ m, sight:[], sig, hl:o?.hl||false }; });   // heading is not drawn: phone compasses proved too unreliable on site
 }
 function tpl(svg){ const t=document.createElement("template"); t.content.append(svg); return t; }
-function clearPhotoOverlays(){ const n=Object.keys(PHOV).length; Object.values(PHOV).forEach(o=>{ o.m.remove(); o.sight?.forEach(x=>x.remove()); }); for(const k in PHOV) delete PHOV[k]; if(n) mapRedraw(); }
+function clearPhotoOverlays(){ const n=Object.keys(PHOV).length; Object.values(PHOV).forEach(o=>{ killEl(o.m); killAll(o.sight); }); for(const k in PHOV) delete PHOV[k]; if(n) mapRedraw(); }
 function highlightPhoto(pid){ Object.entries(PHOV).forEach(([id,o])=>{ const hl=id===pid; if(hl!==o.hl){ o.hl=hl; o.sig=""; } }); $$("#gal .th").forEach(t=>t.classList.toggle("hl",t.dataset.pid===pid)); syncPhotoOverlays(); }
 function flyPhoto(p){ const e=effPose(p); if(!e||!map) return; const g=photoGround(p);
   LOCK=null; fly({ center:{ lat:e.lat, lng:e.lng, altitude:g+2 }, range:60, tilt:62, heading:map.heading??0 },1600); }
@@ -2103,7 +2109,7 @@ function wireFiles(){ $$("#files [data-gonote]").forEach(a=>a.onclick=e=>{ e.pre
 function markSVG(m){ if(m.type==="point"){ const [x,y]=m.pts[0]; return `<circle cx="${x}" cy="${y}" r="0.045" fill="${m.color}" stroke="#0B0F1F" stroke-width="2" vector-effect="non-scaling-stroke"/><text x="${x}" y="${y}" dy="0.016" text-anchor="middle" font-size="0.05" font-weight="700" fill="#0B0F1F">${m.n||""}</text>`; } return `<path d="M${m.pts.map(q=>q.join(",")).join(" L")}" fill="none" stroke="${m.color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>`; }
 function pinTileSVG(no){ return `<svg viewBox="0 0 26 36" class="pintile"><path d="M13 1C6.4 1 1 6.3 1 12.9c0 8.3 10.2 20.2 11.4 21.6a.8.8 0 0 0 1.2 0C14.8 33.1 25 21.2 25 12.9 25 6.3 19.6 1 13 1z" fill="${PIN_NOTE_COLOR}" stroke="#0B0F1F" stroke-width="1.6"/><text x="13" y="16.6" text-anchor="middle" font-size="${String(no).length>1?"9":"10.5"}" font-weight="700" fill="#0B0F1F">${no}</text></svg>`; }
 function noteAnchor(k){ const P=notePts(k); if(P.length===1) return P[0]; const c=centroid(P); const g=P.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?g.reduce((a,b)=>a+b,0)/g.length:undefined }; }
-function clearPinOverlays(){ const n=Object.keys(PINOV).length; Object.values(PINOV).forEach(a=>a.forEach(x=>x.remove())); for(const k in PINOV) delete PINOV[k]; if(n) mapRedraw(); }
+function clearPinOverlays(){ const n=Object.keys(PINOV).length; Object.values(PINOV).forEach(a=>killAll(a)); for(const k in PINOV) delete PINOV[k]; if(n) mapRedraw(); }
 function focusPinNote(id,nid){ openNote(nid); }
 function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woView) return; const w=W(S.open); if(!w) return;
   /* hover: only the hovered note stays lit, everything else (parents included) greys. Inside a note view without a hover: the
