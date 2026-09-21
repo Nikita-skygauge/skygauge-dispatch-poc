@@ -1129,11 +1129,11 @@ function renderCreate(w){
     <div class="locbox" style="margin-top:12px">
       <div class="eyebrow" style="margin-bottom:6px">${P0.length?"Job area · "+shapeLabel(sh):"Nothing placed yet"}</div>
       ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="${verb} the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:""}
-      <div class="acts" style="margin-top:8px"><button class="btn sm" id="c-undo" ${P0.length?"":"disabled"}>Remove last point</button>${sh.kind==="line"&&P0.length>=3?`<button class="btn sm teal" id="c-close">Create area</button>`:""}${sh.kind==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}</div>
+      <div class="acts" style="margin-top:8px">${P0.length?`<button class="btn sm" id="c-undo">Remove last point</button>`:""}${sh.kind==="line"&&P0.length>=3?`<button class="btn sm teal" id="c-close">Create area</button>`:""}${sh.kind==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m</label>`:""}</div>
     </div>
     <div class="create-foot"><button class="btn" id="c-cancel">Cancel</button><button class="btn teal" id="c-create" ${P0.length?"":"disabled"} title="${P0.length?"":"Place at least one point"}">Create Job</button></div>
   </div>`;
-  $("#c-undo").onclick=()=>{ if(V.draw){ if(V.draw.pts.length) selRemove(V.draw.pts.length-1); } else { const p=pts(w).slice(); p.pop(); setPoints(w.id,p,undefined,true,locClosed(w)); } };
+  if($("#c-undo")) $("#c-undo").onclick=()=>{ if(V.draw){ if(V.draw.pts.length) selRemove(V.draw.pts.length-1); } else { const p=pts(w).slice(); p.pop(); setPoints(w.id,p,undefined,true,locClosed(w)); } };
   $("#c-close")?.addEventListener("click",()=>{ if(V.draw) selClose(); });
   $("#l-h")?.addEventListener("change",e=>setPoints(w.id,pts(w),Math.max(0,+e.target.value||0),true,locClosed(w)));
   $$("#pbody [data-rm]").forEach(b=>b.onclick=()=>{ if(V.draw){ selRemove(+b.dataset.rm); return; } const p=pts(w).slice(); p.splice(+b.dataset.rm,1); setPoints(w.id,p,undefined,true,locClosed(w)); });
@@ -1414,11 +1414,11 @@ function addWOOverlay(w){
   if(kind==="area"){ o.area=new lib.Polygon3DElement({ altitudeMode:mode, drawsOccludedSegments:true, fillColor:`rgba(${rgb(c)},0.28)`, strokeColor:`rgba(${rgb(c)},0.95)`, strokeWidth:2 }); o.area.path=[...P,P[0]].map(p=>atSurf(p,0.8)); o.area.addEventListener?.("gmp-click",e=>{ if(V.draw||V.placing) return; enterWOView(w.id); }); map.append(o.area);
     // height, when set, rises from the lowest corner's surface — an area on a roof grows from the roof
     if(h>0){ const g0=minGround(P); o.box=new lib.Polygon3DElement({ altitudeMode:"ABSOLUTE", extruded:true, drawsOccludedSegments:false, fillColor:`rgba(${rgb(c)},0.18)`, strokeColor:`rgba(${rgb(c)},0.8)`, strokeWidth:1.5 }); o.box.path=[...P,P[0]].map(p=>({ lat:p.lat, lng:p.lng, altitude:g0+h })); map.append(o.box); } }
-  if(kind!=="point"&&S.woView&&S.open===w.id) o.labels=segmentLabels(P,kind==="area");   // lengths only while this job is open
-  OV.wo[w.id]=o; applyLegendTo(w);
+  OV.wo[w.id]=o; applyLegendTo(w); syncJobLabels();   // lengths / pin visibility follow the open state
 }
 /* segment lengths belong to the open job only: strip them from every other job, add them to the open one */
-function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const on=S.woView&&S.open===id; if(!on&&o.labels?.length){ o.labels.forEach(x=>x.remove()); o.labels=[]; } if(on&&!(o.labels?.length)){ const w=W(id); if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); } }); }
+function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ o.labels.forEach(x=>x.remove()); o.labels=[]; } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
+  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ o.m.remove(); o.pinHidden=true; } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ o.m?.remove(); o.area?.remove(); o.line?.remove(); o.box?.remove(); (o.labels||[]).forEach(x=>x.remove()); delete OV.wo[w.id]; if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
 function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(o.m) o.m.style.display=hide?"none":""; for(const k of ["area","line","box"]){ if(o[k]){ hide?o[k].remove():(!o[k].isConnected&&map.append(o[k])); } } (o.labels||[]).forEach(l=>l.style.display=hide?"none":""); }
@@ -1468,7 +1468,7 @@ function select3D(opts){
   if(!map){ toast("The map is not loaded.",true); return false; }
   clearDraw(); $("#orbit").hidden=true; clearPointHandles();
   const P=(opts.initial?.points||[]).map(cp);
-  V.draw={ kind:"sel", label:opts.label||"Shape", pts:P, closed:!!opts.initial?.closed&&P.length>=3, live:!!opts.live, needClosed:!!opts.needClosed, site:!!opts.site, sel:null, moving:false,
+  V.draw={ kind:"sel", label:opts.label||"Shape", pts:P, closed:!!opts.initial?.closed&&P.length>=3, live:!!opts.live, needClosed:!!opts.needClosed, site:!!opts.site, noDone:!!opts.noDone, noteId:opts.noteId||null, sel:null, moving:false,
            onChange:opts.onChange, onDone:opts.onDone, onCancel:opts.onCancel, initial:{ points:P.map(cp), closed:!!opts.initial?.closed&&P.length>=3 } };
   map.classList.add("drawing"); renderDraw(); return true;
 }
@@ -1490,7 +1490,7 @@ function ringTemplate(active,selected){ const NS="http://www.w3.org/2000/svg", s
 const ACT_DEFS=[ ["done","Done ✓","act-done"], ["move","Move","act-move"], ["delete","Delete","act-del"], ["reopen","Reopen loop","act-reopen"] ];
 let ACTBOX=null;
 function actBoxInit(){ if(ACTBOX) return; const wrap=$("#canvas-wrap"); if(!wrap) return; const box=document.createElement("div"); box.id="act-box"; box.hidden=true; wrap.append(box); ACTBOX=box;
-  box.addEventListener("pointerenter",()=>{ PV.overBox=true; if(PV.svg) PV.svg.style.display="none"; }); box.addEventListener("pointerleave",()=>{ PV.overBox=false; previewDraw(); });
+  box.addEventListener("pointerenter",()=>{ PV.overBox=true; if(PV.svg) PV.svg.style.display="none"; }); box.addEventListener("pointerleave",()=>{ PV.overBox=false; placeActBox(); previewDraw(); });
   box.addEventListener("click",e=>{ const bt=e.target.closest("[data-act]"); if(!bt) return; e.stopPropagation(); const d=V.draw; if(!d) return; const i=d.sel!=null?d.sel:d.pts.length-1; const key=bt.dataset.act;
     if(key==="done") $("#draw-done").click(); else if(key==="move") selMove(i); else if(key==="delete") selRemove(i); else if(key==="reopen") selReopen(); });
   ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map?.addEventListener(ev,placeActBox)); }
@@ -1501,18 +1501,24 @@ function renderHint(){ const wrap=$("#canvas-wrap"); if(!wrap) return; if(!HINT)
   const d=V.draw; if(!d){ HINT.hidden=true; return; } const n=d.pts.length, verb=isMobile()?"Tap":"Click", sh=shapeKindOf(d.pts,d.closed);
   let txt, btn="";
   if(d.moving&&d.sel!=null){ txt=`${verb} the model where point <b>${d.sel+1}</b> goes`; btn=`<button type="button" data-hint="cancel-move">Cancel move</button>`; }
-  else if(n===0){ txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb.toLowerCase()} the model to start again`:`${verb} the model to place the first point`; btn=d.live?`<button type="button" data-hint="done">Done</button>`:`<button type="button" data-hint="cancel">Cancel</button>`; }
+  else if(n===0){ txt=d.live&&d.initial.points.length?`${d.label} cleared · ${verb.toLowerCase()} the model to start again`:`${verb} the model to place the first point`; btn=d.noDone?"":d.live?`<button type="button" data-hint="done">Done</button>`:`<button type="button" data-hint="cancel">Cancel</button>`; }
   else if(d.closed) txt=`Area · <b>${n}</b> corners${d.live?" · saved":""}`;
   else if(n>=3) txt=`${verb} point ① to close the area, or keep adding`;
   else if(d.needClosed) txt=`An area needs three corners, then close the loop`;
   else txt=`${sh==="point"?"Point":"Line · "+n+" points"}${d.live?" · saved":""} · ${verb.toLowerCase()} the model to add`;
   HINT.innerHTML=`<span>${txt}</span>${btn}`; HINT.hidden=false; }
 function renderActs(){ actBoxInit(); const box=ACTBOX; const d=V.draw; if(!box) return; if(!d||!d.pts.length||d.moving){ box.hidden=true; PV.overBox=false; return; }
-  const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&d.needClosed&&!d.closed)&&!(k==="reopen"&&!d.closed));
+  const defs=ACT_DEFS.filter(([k])=>!(k==="done"&&(d.noDone||(d.needClosed&&!d.closed)))&&!(k==="reopen"&&!d.closed));
   box.innerHTML=defs.map(([k,l,cls])=>`<button type="button" class="${cls}" data-act="${k}">${l}</button>`).join(""); box.hidden=false; placeActBox(); }
 function placeActBox(){ const box=ACTBOX, d=V.draw; if(!box||box.hidden||!d||!d.pts.length||PV.overBox) return; const wrap=$("#canvas-wrap"); const W=wrap.clientWidth, H=wrap.clientHeight; const i=d.sel!=null?d.sel:d.pts.length-1; const p=d.pts[i];
   const s=(PV.err<0.34)?projectLL({ lat:p.lat, lng:p.lng, altitude:(p.ground??0)+0.8 }):null; const bw=box.offsetWidth||120, bh=box.offsetHeight||44;
-  let x=s?s.x-bw/2:W-bw-16, y=s?s.y-bh-46:16; x=Math.max(8,Math.min(W-bw-8,x)); y=Math.max(8,Math.min(H-bh-8,y)); box.style.left=x+"px"; box.style.top=y+"px"; }
+  let x=W-bw-16, y=16;
+  if(s){ const others=d.pts.map((q,k)=>k===i?null:projectLL({ lat:q.lat, lng:q.lng, altitude:(q.ground??0)+0.8 })).filter(Boolean);
+    const cands=[ [s.x-bw/2, s.y-bh-46], [s.x+28, s.y-bh/2-20], [s.x-bw-28, s.y-bh/2-20], [s.x-bw/2, s.y+16] ];
+    const clamp=([cx,cy])=>[ Math.max(8,Math.min(W-bw-8,cx)), Math.max(8,Math.min(H-bh-8,cy)) ];
+    const covers=([cx,cy])=>others.some(o=>o.x>cx-14&&o.x<cx+bw+14&&o.y>cy-40&&o.y<cy+bh+14)||(s.x>cx-6&&s.x<cx+bw+6&&s.y>cy-6&&s.y<cy+bh+6);
+    let pick=null; for(const c of cands){ const cc=clamp(c); if(!covers(cc)){ pick=cc; break; } } [x,y]=pick||clamp(cands[0]); }
+  box.style.left=x+"px"; box.style.top=y+"px"; }
 /* Segment lengths: a pill at the midpoint of every segment (3D length — the height difference between the ends counts).
    Part of the 3D selector's standard set; also drawn on saved job areas and model notes. */
 function dist3(a,b){ const lat0=(a.lat+b.lat)/2*Math.PI/180; const dx=(b.lng-a.lng)*111320*Math.cos(lat0), dy=(b.lat-a.lat)*111320, dz=(b.ground??0)-(a.ground??0); return Math.hypot(dx,dy,dz); }
@@ -1551,7 +1557,7 @@ $("#edit-site").onclick=()=>{ if(!map) return; setTab("map"); closePeek();
 /* ---------- job area: the selector with live save; numbered handles when idle ---------- */
 function addPoints(id){ const w=W(id); if(!w||!map){ toast("The map is not loaded — enter a Maps key first.",true); return; } if(S.tab!=="map") setTab("map");
   const before=locShape(w);
-  select3D({ initial:before, label:"Job area", live:true,
+  select3D({ initial:before, label:"Job area", live:true, noDone:!!W(id)?.draft,
     onChange:sh=>setPoints(id,sh.points,undefined,true,sh.closed),
     onDone:sh=>{ setPoints(id,sh.points,undefined,true,sh.closed); syncPointHandles(); relock(); if(!W(id)?.draft&&JSON.stringify(sh)!==JSON.stringify(before)) log(id, sh.kind==="none"?"cleared the job area":before.kind==="none"?`set the job area (${shapeLabel(sh)})`:`changed the job area (${shapeLabel(sh)})`); if(typeof editLoc!=="undefined"&&editLoc===id){ editLoc=null; renderRecord(); } },
     onCancel:sh=>{ setPoints(id,sh.points,undefined,true,sh.closed); syncPointHandles(); relock(); if(typeof editLoc!=="undefined"&&editLoc===id){ editLoc=null; renderRecord(); } } }); }
@@ -1936,17 +1942,18 @@ function noteMenu(id,parent,anchor){
 let pendingPhotoParent=null, pendingFileParent=null;
 function drawNote(id,nid,parent){ const w=W(id); if(!w) return; if(!map){ toast("The map is not loaded.",true); return; } if(!S.woView) enterWOView(id); setTab("map"); closeViewer(); if(isMobile()) setSheet("peek");
   const existing=nid?N(nid):null;
-  select3D({ initial:existing?{ points:notePts(existing), closed:noteClosed(existing) }:null, label:existing?"Move note":"Note on the model",
+  select3D({ initial:existing?{ points:notePts(existing), closed:noteClosed(existing) }:null, label:existing?"Move note":"Note on the model", noteId:nid||null,
     onDone:async sh=>{ if(existing){ await updateNote(id,nid,{ points:sh.points, closed:sh.closed },$("#nv-loc"),`moved a ${NOTE_LABEL[shapeKindOf(sh.points,sh.closed)==="point"?"pin":shapeKindOf(sh.points,sh.closed)].toLowerCase()} note on the model`); syncPinOverlays(); }
       else { const newId=await createNote(id,"model",parent,{ points:sh.points, closed:sh.closed }); if(newId) openNote(newId,{ focus:true }); } if(isMobile()) setSheet("half"); },
-    onCancel:()=>{ if(isMobile()) setSheet("half"); syncPinOverlays(); } }); }
+    onCancel:()=>{ if(isMobile()) setSheet("half"); syncPinOverlays(); } });
+  syncPinOverlays();   /* the note's saved overlay steps aside while the selector shows it */ }
 
 /* ---------- note view: the job panel is replaced by the note's own panel ---------- */
-function openNote(nid,opts={}){ const n=N(nid); if(!n||!S.open) return; S.note=nid; selPin=nid; document.body.classList.add("note-view"); if(!S.woView) enterWOView(S.open); renderRecord(); syncPinOverlays();
+function openNote(nid,opts={}){ const n=N(nid); if(!n||!S.open) return; S.note=nid; selPin=nid; document.body.classList.add("note-view"); if(!S.woView) enterWOView(S.open); renderRecord(); syncPinOverlays(); syncJobLabels();
   if(n.kind==="model"&&map&&notePts(n).length){ const a=noteAnchor(n); const P=notePts(n); const ext=P.length>=2?Math.max(extentM(bbox(P)).ns,extentM(bbox(P)).ew):0; fly({ center:{ lat:a.lat, lng:a.lng, altitude:(a.ground??GROUND_FALLBACK)+2 }, range:Math.max(70,ext*1.8), tilt:62, heading:map.heading??0 },1200); }
   if(n.kind==="photo"){ highlightPhoto(n.photoId); const p=PH.find(x=>x.id===n.photoId); if(p&&map&&hasPos(p)) flyPhoto(p); }
   if(isMobile()) setSheet("half"); if(opts.focus) setTimeout(()=>{ $("#nv-text")?.focus(); },80); }
-function closeNote(up){ const n=S.note?N(S.note):null; S.note=up&&n?.parent?n.parent:null; if(!S.note) document.body.classList.remove("note-view"); selPin=S.note; highlightPhoto(null); renderRecord(); syncPinOverlays(); }
+function closeNote(up){ const n=S.note?N(S.note):null; S.note=up&&n?.parent?n.parent:null; if(!S.note) document.body.classList.remove("note-view"); selPin=S.note; highlightPhoto(null); renderRecord(); syncPinOverlays(); syncJobLabels(); }
 function noteCardHTML(n,opts={}){
   const kids=childrenOf(n.id); const no=noteNo(n.id); const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const fc=(n.files||[]).length;
   let tile;
@@ -2023,7 +2030,7 @@ function clearPinOverlays(){ Object.values(PINOV).forEach(a=>a.forEach(x=>x.remo
 function focusPinNote(id,nid){ openNote(nid); }
 function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woView) return; const w=W(S.open); if(!w) return;
   const focus=hoverPin||S.note; const openSet=focus?new Set([focus,...descendants(focus).map(x=>x.id),...ancestors(focus).map(x=>x.id)]):null;
-  NT.filter(n=>n.kind==="model"&&notePts(n).length).forEach(k=>{ const P=notePts(k); const parts=[]; const mode=surf(P); const lit=hoverPin?hoverPin===k.id:(selPin===k.id||S.note===k.id); const dim=openSet&&!openSet.has(k.id)&&!lit;
+  NT.filter(n=>n.kind==="model"&&notePts(n).length&&V.draw?.noteId!==n.id).forEach(k=>{ const P=notePts(k); const parts=[]; const mode=surf(P); const lit=hoverPin?hoverPin===k.id:(selPin===k.id||S.note===k.id); const dim=openSet&&!openSet.has(k.id)&&!lit;
     const col=lit?"#00FFE5":dim?"#8A93AD":PIN_NOTE_COLOR; const rgbc=lit?"0,255,229":dim?"138,147,173":"255,212,0"; const a=dim?0.55:1;
     const anc=noteAnchor(k); const m=new lib.Marker3DInteractiveElement({ position:atSurf(anc,P.length===1?0.6:1.2), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true });
     const tp=pinTemplate(col,lit?1.25:dim?0.75:0.95,undefined,noteNo(k.id)); if(dim) tp.tpl.content.firstChild?.setAttribute?.("opacity","0.45"); m.append(tp.tpl); m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); if(S.note===k.id&&P.length===1) selectAt(()=>drawNote(w.id,k.id),0); else openNote(k.id); }); map.append(m); parts.push(m);
