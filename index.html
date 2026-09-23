@@ -154,6 +154,7 @@ body.note-view #pk-fly{display:none}
 .strip{display:flex;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2,#172044);margin:8px 0}.strip .lab{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;min-width:64px}.strip .val{flex:1;color:var(--ink-2)}
 .props.details{margin-top:4px;margin-bottom:8px}
 /* note view: teal frame + context band; the map pill mirrors it */
+#peek.ib-hide{transform:translateX(102%)!important;pointer-events:none}
 body.note-view #peek{box-shadow:inset 0 0 0 2px #00FFE5} body.note-view #pk-exit{display:none!important}
 .nview .ctx{display:flex;align-items:center;gap:10px;padding:8px 12px;margin:-4px -4px 10px;background:rgba(0,255,229,.12);border:1px solid rgba(0,255,229,.35);border-radius:10px;font-size:12px}
 .nview .ctx .tag{font:700 10px/1 var(--sans,system-ui);letter-spacing:.08em;text-transform:uppercase;background:#00FFE5;color:#0B0F1F;padding:4px 7px;border-radius:5px}
@@ -163,6 +164,54 @@ body.note-view #peek{box-shadow:inset 0 0 0 2px #00FFE5} body.note-view #pk-exit
 /* the job panel docks: the board and table shrink to the remaining width instead of being covered */
 @media (min-width:861px){ body.peek-open[data-tab="wo"] #view-wo{margin-right:min(560px,100%)} }
 .toolbar{display:flex;gap:8px;align-items:center;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+/* ---- Inbox ---- */
+#view-inbox{display:grid;grid-template-columns:380px 1fr;background:var(--ground)}
+.ib-list{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.ib-filters{display:flex;gap:6px;padding:10px 12px;border-bottom:1px solid var(--line);flex-wrap:wrap;align-items:center}.ib-filters .sp{flex:1}
+.chipbtn{border:1px solid var(--line);background:var(--panel-2);color:var(--ink-2);border-radius:999px;padding:4px 10px;font-size:12px;font-weight:600;cursor:pointer}.chipbtn[aria-selected="true"]{background:var(--sel);color:#0B0F1F;border-color:var(--sel)}.chipbtn b{font-family:var(--mono);font-weight:500;margin-left:5px;font-size:11px}.chipbtn b:empty{display:none}
+#ib-rows{overflow:auto;flex:1;min-height:0}
+.ib-grp{padding:10px 12px 4px;font:600 11px/1 inherit;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);display:flex;gap:8px;align-items:center;cursor:pointer}.ib-grp .jid{font-family:var(--mono);color:var(--ink-2);text-transform:none;letter-spacing:0}.ib-grp .jt{font-weight:500;text-transform:none;letter-spacing:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.ib-row{display:grid;grid-template-columns:8px 1fr auto;gap:10px;align-items:start;padding:9px 12px;border-bottom:1px solid var(--line);cursor:pointer}
+.ib-row:hover{background:var(--panel-2)}.ib-row.sel{background:var(--panel-2);box-shadow:inset 3px 0 0 var(--sel)}
+.ib-row .u{width:8px;height:8px;border-radius:50%;margin-top:6px;background:transparent}.ib-row.unread .u{background:var(--sel)}
+.ib-row .s{min-width:0}.ib-row .s b{display:block;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink-2)}.ib-row.unread .s b{color:var(--ink)}
+.ib-row .s span{display:block;color:var(--ink-3);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ib-row .s .re{color:var(--ink-2)}
+.ib-row .w{color:var(--ink-3);font-size:11px;text-align:right;font-family:var(--mono);white-space:nowrap}
+.ib-empty{padding:30px 18px;color:var(--ink-3);font-size:13px;line-height:1.6}.ib-empty b{color:var(--ink)}
+.ib-thread{display:flex;flex-direction:column;min-width:0;min-height:0;overflow:auto}
+.ib-jobcard{display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:2;flex-wrap:wrap}
+.ib-jobcard .jid{font-family:var(--mono);color:var(--ink-3);font-size:12px}.ib-jobcard .jt{font-weight:600}.ib-jobcard .last{color:var(--ink-3);font-size:12px}.ib-jobcard .sp{flex:1}
+.ib-jobcard .area{width:44px;height:30px;border-radius:6px;background:linear-gradient(170deg,#5e6a86,#2c3554);position:relative;overflow:hidden;flex:none}.ib-jobcard .area:after{content:"";position:absolute;left:10px;top:9px;width:22px;height:12px;border:1.5px solid var(--sel);background:rgba(0,255,229,.2);transform:skewX(-25deg)}
+.ib-head{padding:14px 18px 4px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}.ib-head h3{margin:0;font-size:18px;font-weight:600;flex:1;min-width:200px}
+.ib-about{padding:0 18px 8px;color:var(--ink-3);font-size:12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ib-about a{color:var(--ink-2)}
+.addr{display:inline-flex;align-items:center;gap:8px;padding:4px 8px;border:1px dashed var(--line);border-radius:8px;font-family:var(--mono);font-size:12px;color:var(--ink-2);background:var(--panel)}.addr .btn{padding:2px 8px}
+.ib-parts{padding:0 18px 12px;display:flex;gap:6px;flex-wrap:wrap;align-items:center}.ib-parts .lab{font-size:11px;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.pchip{display:inline-flex;align-items:center;gap:6px;padding:3px 8px 3px 3px;border-radius:999px;background:var(--panel);border:1px solid var(--line);font-size:12px}.pchip .avatar.sm{width:20px;height:20px;font-size:9px}.pchip .st{font-size:10px;color:var(--ink-3)}.pchip .st.on{color:var(--accent)}
+.ib-msgs{padding:0 18px;display:flex;flex-direction:column;gap:12px}
+.msg{border:1px solid var(--line);border-radius:12px;background:var(--panel);overflow:hidden}
+.msg .h{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:12px;flex-wrap:wrap}.msg .h b{font-weight:600}.msg .h .via{color:var(--ink-3)}.msg .h .t{margin-left:auto;color:var(--ink-3);font-family:var(--mono);font-size:11px}
+.msg .b{padding:12px 14px;color:var(--ink-2);font-size:13px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
+.msg .q{color:var(--ink-3);font-size:12px;border-left:2px solid var(--line);padding-left:10px;margin:8px 14px 12px;white-space:pre-wrap;display:none}.msg.showq .q{display:block}.msg .qtog{margin:0 14px 10px;font-size:11px;color:var(--ink-3);cursor:pointer;background:none;border:0;padding:0}
+.msg.mine{border-color:rgba(0,255,229,.45)}.msg.queued{border-style:dashed}
+.msg .st{font-size:10px;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:5px;background:var(--panel-2);color:var(--ink-3)}.msg .st.failed{color:var(--crit)}
+.ext{display:flex;align-items:center;gap:10px;margin:10px 14px 2px;padding:8px 12px;border-radius:10px;background:rgba(0,255,229,.08);border:1px solid rgba(0,255,229,.35);font-size:12px;flex-wrap:wrap}
+.ext .k{font:700 10px/1 inherit;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}.ext .v{font-family:var(--mono);color:var(--ink);font-size:13px}.ext .why{color:var(--ink-3)}.ext .sp{flex:1}.ext.done{border-style:dashed;opacity:.8}
+.att{display:flex;gap:8px;flex-wrap:wrap;padding:0 14px 12px}
+.file{display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);border-radius:8px;font-size:12px;background:var(--panel-2);color:var(--ink);text-decoration:none}.file .ic{width:18px;height:22px;border-radius:3px;background:var(--steel-2);color:var(--accent);display:grid;place-items:center;font:700 8px/1 inherit}.file .sz{color:var(--ink-3);font-family:var(--mono);font-size:11px}.file .to{color:var(--ok);font-weight:600}
+.compose{margin:12px 18px 18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.compose .from{display:flex;align-items:center;gap:8px;padding:8px 12px;border-bottom:1px solid var(--line);font-size:12px;color:var(--ink-3);flex-wrap:wrap}.compose .from b{color:var(--ink);font-weight:600}
+.compose .row{display:flex;align-items:center;gap:8px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:12px}.compose .row .lab{color:var(--ink-3);min-width:56px}.compose .row input{flex:1;border:0;background:transparent;color:var(--ink);font:inherit;padding:4px 0;min-width:0}.compose .row input:focus-visible{box-shadow:none;outline:none}
+.compose textarea{width:100%;border:0;background:transparent;color:var(--ink);font:inherit;padding:12px;min-height:80px;resize:vertical;display:block}.compose textarea:focus-visible{box-shadow:none}
+.compose .foot{display:flex;align-items:center;gap:8px;padding:8px 12px;border-top:1px solid var(--line);flex-wrap:wrap}.compose .foot .sp{flex:1}.compose .foot .hint{font-size:11px}
+.compose .catt{display:flex;gap:6px;flex-wrap:wrap;padding:0 12px 8px}
+.ib-blank{display:grid;place-items:center;height:100%;color:var(--ink-3);text-align:center;padding:40px;line-height:1.7}.ib-blank b{color:var(--ink)}
+/* job panel: Email section */
+.thr{display:flex;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel-2);margin-bottom:6px;cursor:pointer}.thr:hover{border-color:var(--sel);box-shadow:0 0 0 1px var(--sel)}
+.thr .u{width:8px;height:8px;border-radius:50%;background:var(--sel);flex:none}.thr .u.z{background:transparent}
+.thr .t{flex:1;min-width:0}.thr .t b{display:block;font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.thr .t span{color:var(--ink-3);font-size:12px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.thr .n{font-family:var(--mono);font-size:11px;color:var(--ink-3)}.thr .go{color:var(--ink-3)}
+.people{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+@media (max-width:860px){ #view-inbox{grid-template-columns:1fr} body.ib-open .ib-list{display:none} body:not(.ib-open) .ib-thread{display:none} .ib-jobcard{gap:8px} }
 .toolbar .count{font-family:var(--mono);font-size:12px;color:var(--ink-3)}
 .toolbar .sp{margin-left:auto}
 #views{flex:1;min-height:0;overflow:auto;padding:14px 18px}
@@ -387,6 +436,7 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
   <div class="tabs" role="tablist">
     <button role="tab" aria-selected="true" data-tab="map">Viewer</button>
     <button role="tab" aria-selected="false" data-tab="wo">Jobs<b id="tab-open"></b></button>
+    <button role="tab" aria-selected="false" data-tab="inbox">Inbox<b id="tab-inbox"></b></button>
   </div>
   <div id="search"><input id="q" type="search" placeholder="Search jobs…" autocomplete="off" aria-label="Search"></div>
   <button class="btn" id="search-toggle" aria-label="Search" hidden>🔍</button>
@@ -437,6 +487,14 @@ body.creating #pbody{display:flex;flex-direction:column}.create{display:flex;fle
       <button class="btn primary" id="b-new">＋ New</button>
     </div>
     <div id="views"></div>
+  </div>
+
+  <div class="screen" id="view-inbox" hidden>
+    <div class="ib-list" id="ib-list">
+      <div class="ib-filters" id="ib-filters"><button class="chipbtn" data-f="all" aria-selected="true">All</button><button class="chipbtn" data-f="unread">Unread<b id="ib-unread-n"></b></button><button class="chipbtn" data-f="mine">Mine</button><button class="chipbtn" data-f="job" id="ib-jobf">Job ▾</button><span class="sp"></span><button class="btn sm" id="ib-sim" hidden title="Write an inbound email into the database exactly as the mail service will">Test: receive an email…</button></div>
+      <div id="ib-rows"></div>
+    </div>
+    <div class="ib-thread" id="ib-thread"></div>
   </div>
 
   <aside id="peek" aria-label="Job">
@@ -673,7 +731,8 @@ function startApp(){
     if(!shared && S.admin){ let local=""; try{ local=localStorage.getItem(LSK.key)||""; }catch{} if(local){ DB.set("config/maps",{ key:local, updated:now(), updatedBy:S.user.email }).catch(console.error); return; } }
     if(shared!==S.mapsKey){ S.mapsKey=shared; if(S.site && !map) initMap(); }
   }));
-  if(!booted){ booted=true; wireUI(); const id=(PARAMS.get("wo")||PARAMS.get("job")||"").replace(/^WO-/,"J-"); if(id) setTimeout(()=>openWO(id),600); }
+  watchMail();
+  if(!booted){ booted=true; wireUI(); const id=(PARAMS.get("wo")||PARAMS.get("job")||"").replace(/^WO-/,"J-"); const tid=PARAMS.get("thread"); if(tid) setTimeout(()=>openThread(tid),900); else if(id) setTimeout(()=>openWO(id),600); }
 }
 const initials = n => (n||"?").split(/[\s@._]+/).filter(Boolean).slice(0,2).map(s=>s[0].toUpperCase()).join("");
 function saveView(){ try{ localStorage.setItem(LSK.view,JSON.stringify({ view:S.view, hb:[...S.hidden.board], ht:[...S.hidden.table], sort:S.sort })); }catch{} }
@@ -731,6 +790,7 @@ async function setStatus(id,sid){
   if(nowDone&&!wasDone) patch.completedAt=now(); if(!nowDone&&wasDone) patch.completedAt=null;
   Object.assign(w,patch); refreshWOOverlay(w); renderAll();
   await flashSaved($("#pbody [data-status]")||$(`#views tr[data-id="${id}"] [data-pid="status"]`),()=>DB.update(WO_COL+"/"+id,patch)); log(id,`changed Status from ${from} to ${to}`);
+  if((w.values?.people||[]).some(p=>p.email)) { toast(`Status → ${P(to)} · <button class="link" id="st-mail">Email the people on this job</button>`); $("#st-mail")?.addEventListener("click",()=>newThreadFrom(id,{kind:"status"},{ body:`${id} · ${w.title||"Untitled"} is now ${to}.` })); }
 }
 async function setValue(id,pid,v){
   const w=W(id); if(!w) return; const p=prop(pid); if(!p) return;
@@ -1105,7 +1165,7 @@ function renderRecord(){
     <div class="trow"><textarea class="ptitle" id="ptitle" rows="1" placeholder="Untitled">${P(w.title||"")}</textarea><div class="pv" data-status>${statusPill(w)}</div></div>
     ${custom.length?`<div class="chips">${custom.map(p=>`<div class="pv chip" data-edit="${p.id}" title="${P(p.name)}">${renderValue(p,w.values?.[p.id],w)}</div>`).join("")}</div>`:""}
     <div class="metaline">${P(w.createdBy?.name||"")} · ${P(fmtDate(w.created,true))}${w.edited?` · edited ${P(rel(w.edited))}`:""}${w.completedAt?` · completed ${P(fmtDate(w.completedAt,true))}`:""}</div>
-    ${editLoc!==w.id?`<div class="strip"><span class="lab">Job area</span><span class="val">${P0.length?areaTxt:`<span style="color:var(--crit)">required — mark it on the model</span>`}</span>${P0.length?`<button class="btn sm teal" id="l-edit">Edit</button>`:`<button class="btn sm teal" id="l-add">＋ Mark job area</button>`}</div>`
+    ${editLoc!==w.id?`<div class="strip"><span class="lab">Job area</span><span class="val">${P0.length?areaTxt:`<span style="color:var(--crit)">required — mark it on the model</span>`}</span>${P0.length?`<button class="btn sm teal" id="l-edit">Edit</button>`:`<button class="btn sm teal" id="l-add">＋ Mark job area</button>`}</div>${mailStripHTML(w)}`
     :`<section class="ps"><h3 style="cursor:default">Job area <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${areaTxt}</span></h3><div class="locbox editing">
       ${P0.length?`<div class="ptlist">${P0.map((p,i)=>`<div class="ptrow ${V.draw?.sel===i?"sel":""}" data-i="${i}"><span class="ptn">${i+1}</span><span class="mono">${p.lat.toFixed(5)}, ${p.lng.toFixed(5)}</span><button class="btn sm" data-mv="${i}" title="Click the model to move this point">Move</button><button class="btn sm" data-rm="${i}" title="Remove this point">✕</button></div>`).join("")}</div>`:`<div class="hint">${isMobile()?"Tap":"Click"} the model: one point, more for a line, then point ① to close an area.</div>`}
       <div class="acts">${locKindW(w)==="area"?`<label class="hint" style="display:flex;align-items:center;gap:4px">Height <input class="in mono" id="l-h" type="number" min="0" value="${locHeight(w)}" style="width:64px;padding:2px 6px"> m <span class="hint">(0 = flat)</span></label>`:""}
@@ -1118,10 +1178,11 @@ function renderRecord(){
       <div class="addprop" id="add-prop">＋ Add a property</div>
     </div>`:""}
     ${notesHTML()}
+    ${mailSectionHTML(w)}
     ${galleryHTML()}
     ${filesHTML()}
     <section class="ps"><h3 id="act-h">${showAct?"▾":"▸"} Activity <span class="mono" style="font-weight:400" id="act-n">${ACT.length}</span></h3><div id="act" ${showAct?"":"hidden"}></div></section>`;
-  renderActivity(); wireGallery(); wireNotes(); wireFiles(); syncPinOverlays();
+  renderActivity(); wireGallery(); wireNotes(); wireFiles(); wireMailSection(w); syncPinOverlays();
   const t=$("#ptitle"); const fit=()=>{ t.style.height="auto"; t.style.height=t.scrollHeight+"px"; }; fit(); t.oninput=fit;
   t.onkeydown=e=>{ if(e.key==="Enter"){ e.preventDefault(); t.blur(); } if(e.key==="Escape"){ t.value=w.title||""; fit(); t.blur(); e.stopPropagation(); } };
   t.onblur=()=>setTitle(w.id,t.value.trim());
@@ -1176,7 +1237,7 @@ function renderAll(){
   const open=live().filter(isOpen); $("#tab-open").textContent=open.length||"";
   $("#m-records").textContent=`${S.assets.length} assets · ${live().length} jobs · ${open.length} open`;
   renderTree(); renderLegend(); regSummary();
-  if(S.tab==="wo") renderViews();
+  if(S.tab==="wo") renderViews(); if(S.tab==="inbox") renderInbox();
   if(S.open) renderRecord();
 }
 function renderViews(){
@@ -1252,7 +1313,7 @@ function renderTree(){
 $("#tree").addEventListener("click",e=>{ const it=e.target.closest(".it"); if(!it) return; if(it.dataset.wo) enterWOView(it.dataset.wo); else if(it.dataset.asset) assetEditor(asset(it.dataset.asset),it); });
 
 /* ---------- tabs, search, user menu, admin, export ---------- */
-function setTab(t){ S.tab=t; document.body.dataset.tab=t; $$("#bar [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t)); $("#view-map").hidden=t!=="map"; $("#view-wo").hidden=t!=="wo"; renderAll(); }
+function setTab(t){ S.tab=t; document.body.dataset.tab=t; $$("#bar [data-tab]").forEach(b=>b.setAttribute("aria-selected",b.dataset.tab===t)); $("#view-map").hidden=t!=="map"; $("#view-wo").hidden=t!=="wo"; $("#view-inbox").hidden=t!=="inbox"; $("#peek").classList.toggle("ib-hide",t==="inbox"); renderAll(); if(t==="inbox") renderInbox(); }
 const isMobile=()=>matchMedia("(max-width:860px)").matches;
 let dragMoved=false;
 function dragSheet(handle,sheet,onRelease){
@@ -1279,6 +1340,8 @@ function wireUI(){
   $$("#reg .sub button").forEach(b=>b.onclick=()=>{ S.sub=b.dataset.sub; $$("#reg .sub button").forEach(x=>x.setAttribute("aria-selected",x===b)); renderTree(); });
   $$("#viewsw button").forEach(b=>b.onclick=()=>{ S.view=b.dataset.v; saveView(); renderViews(); });
   $("#q").oninput=e=>{ S.q=e.target.value; renderAll(); };
+  $$("#ib-filters [data-f]").forEach(b=>b.onclick=e=>{ if(b.dataset.f==="job"){ jobFilterMenu(b); return; } IB.f=b.dataset.f; IB.job=null; renderInbox(); });
+  $("#ib-sim").onclick=e=>simInbound(e.currentTarget,null);
   $("#b-new").onclick=()=>startCreate();
   $("#new-wo-map").onclick=()=>startCreate();
   $("#b-props").onclick=e=>propsToggle(e.currentTarget);
@@ -1295,6 +1358,7 @@ function wireUI(){
   $("#keyInput").onkeydown=e=>{ if(e.key==="Enter") $("#keySave").click(); };
   setTab(S.tab);
 }
+function jobFilterMenu(anchor){ const el=openPop(anchor,`<div class="mi" data-j="">All jobs</div><div class="hr"></div>${live().filter(w=>jobThreads(w.id).length).map(w=>`<div class="mi" data-j="${w.id}"><span class="mono" style="margin-right:6px">${w.id}</span>${P(w.title||"Untitled")}<span class="r">${jobThreads(w.id).length}</span></div>`).join("")||`<div class="hint" style="padding:6px 8px">No job has threads yet.</div>`}`,{width:300,noFocus:true}); el.onclick=e=>{ const j=e.target.closest("[data-j]"); if(!j) return; closePop(); if(j.dataset.j){ IB.f="job"; IB.job=j.dataset.j; } else { IB.f="all"; IB.job=null; } renderInbox(); }; }
 function userMenu(anchor){
   const el=openPop(anchor,`<div class="fr" style="flex-direction:column;align-items:flex-start;gap:0"><b>${P(S.user.name)}</b><span class="hint">${P(S.user.email)}${S.admin?" · Admin":""}</span></div><div class="hr"></div>
     ${S.admin?`<div class="mi" data-a="admin">Who can enter…</div>`:""}<div class="mi" data-a="members">Members<span class="r">${S.members.length}</span></div>${S.admin?`<div class="mi" data-a="key">Change the shared Google Maps key</div>`:""}<div class="mi" data-a="theme">Toggle dark mode</div><div class="hr"></div><div class="mi" data-a="out">Sign out</div>`,{width:240,noFocus:true});
@@ -2069,7 +2133,7 @@ function renderNoteView(w){
   const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; const kids=childrenOf(n.id); const depth=depthOf(n.id);
   $("#pk-id").textContent=`${w.id} · note ${noteNo(n.id)}`;
   $("#pbody").innerHTML=`<div class="nview">
-    <div class="ctx"><span class="tag">Note</span><span class="lvl">${[1,2,3].map(l=>`<s class="${l<=depth?"on":""}"></s>`).join("")}</span><span class="crumbs">${crumbs.map(c=>c.here?`<b>${P(c.label)}</b>`:`<a href="#" data-crumb="${c.id||""}">${P(c.label)}</a><span class="sep">›</span>`).join("")}</span><button class="btn sm teal" id="nv-back" title="Back (Esc)">‹ ${depth>1?"Back":"Back to job"}</button></div>
+    <div class="ctx"><span class="tag">Note</span><span class="lvl">${[1,2,3].map(l=>`<s class="${l<=depth?"on":""}"></s>`).join("")}</span><span class="crumbs">${crumbs.map(c=>c.here?`<b>${P(c.label)}</b>`:`<a href="#" data-crumb="${c.id||""}">${P(c.label)}</a><span class="sep">›</span>`).join("")}</span><button class="btn sm" id="nv-mail" title="Start an email thread about this note">✉ Email</button><button class="btn sm teal" id="nv-back" title="Back (Esc)">‹ ${depth>1?"Back":"Back to job"}</button></div>
     <div class="nhead"><span class="kico big">${KIND_ICON[n.kind]}</span><input class="ntitle-in" id="nv-title" placeholder="${P(noteTitle(n))}" value="${P(n.title||"")}"><span class="chip soft">${n.kind==="model"?`${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}`:n.kind==="photo"?"Photo":n.kind==="file"?"Files":"Text"}</span></div>
     <textarea class="ntext big" id="nv-text" rows="2" placeholder="${n.kind==="text"?"Write the note…":"Add text to this note…"}">${P(n.text||"")}</textarea>
     ${n.kind==="model"?`<section class="ps"><h3 style="cursor:default">Location <span class="hint" style="font-weight:400;text-transform:none;letter-spacing:0">${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}</span></h3><div class="strip" id="nv-loc"><span class="lab">Location</span><span class="val">${NOTE_LABEL[noteShape(n)]} · ${notePts(n).length} point${notePts(n).length===1?"":"s"}</span><button class="btn sm teal" id="nv-move">${noteShape(n)==="pin"?"Move":"Edit"}</button></div></section>`:""}
@@ -2083,7 +2147,7 @@ function renderNoteView(w){
   </div>`;
   if(S.woView) woMode();
   $$("#pbody [data-crumb]").forEach(a=>a.onclick=e=>{ e.preventDefault(); const id=a.dataset.crumb; if(!id){ S.note=null; document.body.classList.remove("note-view"); selPin=null; highlightPhoto(null); renderRecord(); syncPinOverlays(); } else openNote(id); });
-  $("#nv-back").onclick=()=>closeNote(true);
+  $("#nv-back").onclick=()=>closeNote(true); $("#nv-mail").onclick=()=>newThreadFrom(w.id,{ kind:"note", noteId:n.id });
   const ti=$("#nv-title"); ti.onblur=()=>{ if(ti.value.trim()!==(n.title||"")) updateNote(w.id,n.id,{ title:ti.value.trim() },ti,`renamed a note to “${ti.value.trim().slice(0,60)}”`); }; ti.onkeydown=e=>{ if(e.key==="Enter") ti.blur(); };
   const tx=$("#nv-text"); const grow=()=>{ tx.style.height="auto"; tx.style.height=Math.max(56,tx.scrollHeight)+"px"; }; grow(); tx.oninput=grow; tx.onblur=()=>{ if(tx.value.trim()!==(n.text||"")) updateNote(w.id,n.id,{ text:tx.value.trim() },tx,tx.value.trim()?`wrote in note ${noteNo(n.id)}: “${tx.value.trim().slice(0,80)}${tx.value.trim().length>80?"…":""}”`:`cleared note ${noteNo(n.id)}`); };
   $("#nv-move")?.addEventListener("click",()=>drawNote(w.id,n.id));
@@ -2127,6 +2191,204 @@ function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woVie
     if(S.note===k.id&&P.length>1){ /* numbered handles inside the note's view: click one → selector with that point selected */
       P.forEach((p,i)=>{ const h=new lib.Marker3DInteractiveElement({ position:atSurf(p,0.8), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); h.append(pinTemplate("#FF6A00",0.85,undefined,i+1).tpl); h.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); selectAt(()=>drawNote(w.id,k.id),i); }); map.append(h); parts.push(h); }); }
     PINOV[k.id]=parts; }); }
+
+
+/* =====================================================================
+   MAIL — email threads attached to jobs. The platform is a participant in email, not a replacement for it.
+   workspace/main/threads/{tid}: { jobId, n, addr, subject, about:{kind:"job"|"note"|"status", noteId?, label},
+       participants:[{email,name,uid?}], created, createdBy, last:{t,from,snippet}, count, readBy:{uid:iso} }
+   workspace/main/threads/{tid}/messages/{mid}: { dir:"in"|"out", from:{email,name}, to:[..], cc:[..], t, subject,
+       text, quote?, attachments:[{id,name,size,type,url,noteId?}], extracted:{po:[{value,src,applied?}]},
+       status:"queued"|"sent"|"received"|"failed", messageId?, inReplyTo?, by? }
+   Routing is the address: j-26-008@mail.skygauge.co → new thread in J-26-008; j-26-008-t2@ → thread 2. The mail
+   service (functions/) writes inbound messages here in exactly the shape this file writes them; nothing guesses.
+   ===================================================================== */
+const MAIL_COL="workspace/main/threads", MAIL_DOMAIN="mail.skygauge.co";
+let TH=[], thUnsub=null, MSG=[], msgUnsub=null, msgThread=null, IB={ f:"all", job:null, sel:null, compose:null }, MAILCFG=null;
+const jobAddr = id => `${String(id).toLowerCase()}@${MAIL_DOMAIN}`;
+const threadAddr = (id,n) => `${String(id).toLowerCase()}-t${n}@${MAIL_DOMAIN}`;
+const T = tid => TH.find(t=>t.id===tid);
+const jobThreads = id => TH.filter(t=>t.jobId===id).sort((a,b)=>(b.last?.t||b.created||"").localeCompare(a.last?.t||a.created||""));
+const meEmail = () => S.user?.email||"";
+function isUnread(t){ if(!t.last) return false; if((t.last.from?.email||"").toLowerCase()===meEmail()) return false; const r=t.readBy?.[S.user.uid]; return !r||r<t.last.t; }
+function unreadCount(){ return TH.filter(t=>!W(t.jobId)?.trashed&&isUnread(t)).length; }
+function isMine(t){ return (t.participants||[]).some(p=>(p.email||"").toLowerCase()===meEmail()); }
+function onPlatform(email){ email=(email||"").toLowerCase(); return email===meEmail()||S.members.some(m=>(m.email||"").toLowerCase()===email); }
+function nameOf(p){ if(!p) return ""; if(p.name) return p.name; const m=S.members.find(m=>(m.email||"").toLowerCase()===(p.email||"").toLowerCase()); return m?.name||p.email||""; }
+function parseAddrs(s){ return String(s||"").split(/[,;\s]+/).map(x=>x.trim().toLowerCase()).filter(x=>/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x)).map(email=>({ email, name:nameOf({email})||"" })); }
+function aboutLabel(t){ const a=t.about||{kind:"job"}; if(a.kind==="note") return a.label?`about note · ${a.label}`:"about a note"; if(a.kind==="status") return "about a status change"; return "about the job"; }
+function snippet(s,n=90){ return String(s||"").replace(/\s+/g," ").trim().slice(0,n); }
+
+/* ---------- subscriptions ---------- */
+function watchMail(){ thUnsub?.(); thUnsub=DB.watchCol(MAIL_COL,rows=>{ TH=rows; if(IB.sel&&S.tab==="inbox"&&document.visibilityState!=="hidden") markRead(IB.sel); renderMailBadge(); if(S.tab==="inbox") renderInbox(); if(S.open&&!S.note&&!S.creating) renderMailSection(); });
+  S.unsub.push(()=>{ thUnsub?.(); thUnsub=null; msgUnsub?.(); msgUnsub=null; });
+  S.unsub.push(DB.watchDoc("config/mail",d=>{ MAILCFG=d; if(S.tab==="inbox") renderInbox(); })); }
+function watchMessages(tid){ if(msgThread===tid) return; msgUnsub?.(); MSG=[]; msgThread=tid; if(!tid) return;
+  msgUnsub=DB.watchCol(MAIL_COL+"/"+tid+"/messages",rows=>{ MSG=rows.sort((a,b)=>(a.t||"").localeCompare(b.t||"")); if(IB.sel===tid&&S.tab==="inbox") renderThreadPane(); }); }
+function renderMailBadge(){ const n=unreadCount(); const b=$("#tab-inbox"); if(b) b.textContent=n||""; const u=$("#ib-unread-n"); if(u) u.textContent=n||""; }
+
+/* ---------- thread creation ---------- */
+async function createThread(jobId,opts={}){
+  const w=W(jobId); if(!w) return null;
+  const n=Math.max(0,...jobThreads(jobId).map(t=>t.n||0))+1;
+  const me={ email:meEmail(), name:S.user.name, uid:S.user.uid };
+  const parts=[me,...(opts.participants||[])].filter((p,i,a)=>a.findIndex(x=>x.email===p.email)===i);
+  const t={ jobId, n, addr:threadAddr(jobId,n), subject:opts.subject||`${jobId} · ${w.title||"Untitled"}`, about:opts.about||{kind:"job"}, participants:parts, created:now(), createdBy:userRef(), last:null, count:0, readBy:{ [S.user.uid]:now() } };
+  const tid=await DB.add(MAIL_COL,t);
+  log(jobId,`started an email thread “${t.subject}”`);
+  return tid;
+}
+/* Open the Inbox on a thread; state-preserving — the job stays open behind it and Back returns to it. */
+function openThread(tid,composeOpts){ IB.sel=tid; IB.compose=composeOpts||null; document.body.classList.add("ib-open"); if(S.tab!=="inbox") setTab("inbox"); else renderInbox(); watchMessages(tid); markRead(tid); const t=T(tid); if(t){ try{ const u=new URL(location.href); u.searchParams.set("job",t.jobId); u.searchParams.set("thread",tid); history.replaceState(null,"",u); }catch{} } }
+function closeThread(){ IB.sel=null; IB.compose=null; document.body.classList.remove("ib-open"); msgUnsub?.(); msgUnsub=null; msgThread=null; MSG=[]; renderInbox(); try{ const u=new URL(location.href); u.searchParams.delete("thread"); history.replaceState(null,"",u); }catch{} }
+function markRead(tid){ const t=T(tid); if(!t||!isUnread(t)) return; t.readBy={ ...(t.readBy||{}), [S.user.uid]:now() }; DB.update(MAIL_COL+"/"+tid,{ ["readBy."+S.user.uid]:now() }).catch(()=>{}); renderMailBadge(); }
+/* Start a thread from a job, a note, or a status change and land in the compose box. */
+async function newThreadFrom(jobId,about,extra={}){ const w=W(jobId); if(!w) return; let subject=`${jobId} · ${w.title||"Untitled"}`; const att=[];
+  if(about?.kind==="note"){ const n=N(about.noteId); if(n){ about.label=noteTitle(n); subject=`${jobId} · ${noteTitle(n)}`; if(n.kind==="photo"){ const p=PH.find(x=>x.id===n.photoId); if(p) att.push({ id:uid(), name:`${noteTitle(n)}.jpg`, type:"image/jpeg", url:p.thumb, noteId:n.id, marks:(p.marks||[]).length }); } (n.files||[]).forEach(f=>att.push({ id:f.id, name:f.name, size:f.size||0, type:f.type||"", url:f.url, noteId:n.id })); } }
+  if(about?.kind==="status") subject=`${jobId} · ${w.title||"Untitled"} — now ${status(w.statusId)?.name||""}`;
+  const people=(w.values?.people||[]).map(p=>({ email:(p.email||"").toLowerCase(), name:p.name||"" })).filter(p=>p.email&&p.email!==meEmail());
+  const tid=await createThread(jobId,{ subject, about, participants:people });
+  if(tid) openThread(tid,{ to:people.map(p=>p.email).join(", "), attachments:att, body:extra.body||"" });
+}
+
+/* ---------- inbound: the same routine the mail service runs. Exposed in mock mode and to the admin "Test: receive" form. ----------
+   msg: { to:[addr], cc:[addr], from:{email,name}, subject, text, quote?, attachments:[{name,size,type,url}], messageId?, inReplyTo? } */
+function routeAddress(addrs){ for(const a of addrs||[]){ const m=String(a).toLowerCase().match(/^(j-\d{2}-\d{3})(?:-t(\d+))?@/); if(m) return { jobId:m[1].toUpperCase(), n:m[2]?+m[2]:null }; } return null; }
+const PO_RX=[/\b(45\d{8})\b/g, /\b(?:P\.?\s?O\.?|purchase\s+order)\s*(?:#|no\.?|number|:)?\s*([A-Z0-9][A-Z0-9-]{3,})/gi];
+function extractPO(text){ const out=[]; const seen=new Set(); for(const rx of PO_RX){ rx.lastIndex=0; let m; while((m=rx.exec(text||""))){ const v=m[1].toUpperCase(); if(!seen.has(v)){ seen.add(v); out.push({ value:v, src:snippet(text.slice(Math.max(0,m.index-30),m.index+m[0].length+20),80) }); } } } return out; }
+async function receiveMail(msg){
+  const r=routeAddress([...(msg.to||[]),...(msg.cc||[])]); if(!r) throw new Error("No job address on the message");
+  const w=W(r.jobId); if(!w) throw new Error(`Unknown job ${r.jobId}`);
+  let t=r.n!=null?jobThreads(r.jobId).find(x=>x.n===r.n):null;
+  if(!t&&msg.inReplyTo){ t=TH.find(x=>x.jobId===r.jobId&&x.lastMessageId===msg.inReplyTo)||null; }
+  const from={ email:(msg.from?.email||"").toLowerCase(), name:msg.from?.name||"" };
+  const others=[...(msg.to||[]),...(msg.cc||[])].map(a=>String(a).toLowerCase()).filter(a=>!a.endsWith("@"+MAIL_DOMAIN)).map(email=>({ email, name:nameOf({email}) }));
+  let tid;
+  if(!t){ const n=Math.max(0,...jobThreads(r.jobId).map(x=>x.n||0))+1; const th={ jobId:r.jobId, n, addr:threadAddr(r.jobId,n), subject:msg.subject||"(no subject)", about:{kind:"job"}, participants:[from,...others].filter((p,i,a)=>p.email&&a.findIndex(x=>x.email===p.email)===i), created:now(), createdBy:{ name:from.name||from.email, email:from.email }, last:null, count:0, readBy:{} }; tid=await DB.add(MAIL_COL,th); t={ id:tid, ...th }; TH.push(t); }
+  else tid=t.id;
+  const text=String(msg.text||""); const extracted={ po:extractPO(text+"\n"+(msg.quote||"")) };
+  const m={ dir:"in", from, to:(msg.to||[]).map(a=>({email:String(a).toLowerCase()})), cc:(msg.cc||[]).map(a=>({email:String(a).toLowerCase()})), t:msg.t||now(), subject:msg.subject||t.subject, text, quote:msg.quote||"", attachments:(msg.attachments||[]).map(a=>({ id:uid(), name:a.name||"file", size:a.size||0, type:a.type||"", url:a.url||"" })), extracted, status:"received", messageId:msg.messageId||("<"+uid()+"@"+MAIL_DOMAIN+">"), inReplyTo:msg.inReplyTo||"" };
+  await DB.add(MAIL_COL+"/"+tid+"/messages",m);
+  const parts=[...(t.participants||[]),from,...others].filter((p,i,a)=>p.email&&a.findIndex(x=>x.email===p.email)===i);
+  await DB.update(MAIL_COL+"/"+tid,{ last:{ t:m.t, from, snippet:snippet(text) }, count:(t.count||0)+1, participants:parts, lastMessageId:m.messageId });
+  // everything lands in the job: activity, files, people
+  await DB.add(WO_COL+"/"+r.jobId+"/activity",{ t:m.t, by:{ name:from.name||from.email, email:from.email }, text:`replied by email · “${snippet(m.subject,60)}”${m.attachments.length?` · ${m.attachments.length} attachment${m.attachments.length===1?"":"s"}`:""}` }).catch(()=>{});
+  if(m.attachments.length&&m.attachments.some(a=>a.url)) await DB.add(WO_COL+"/"+r.jobId+"/notes",{ kind:"file", parent:null, title:m.attachments.length===1?m.attachments[0].name:`${m.attachments.length} files from email`, text:`From ${from.name||from.email} · “${snippet(m.subject,60)}”`, files:m.attachments.filter(a=>a.url).map(a=>({ ...a, t:m.t, by:from.name||from.email })), threadId:tid, t:m.t, by:from.name||from.email }).catch(()=>{});
+  await mergePeople(r.jobId,parts);
+  return { tid, extracted };
+}
+async function mergePeople(jobId,parts){ const w=W(jobId); const p=prop("people"); if(!w||!p||p.type!=="person") return; const cur=w.values?.people||[]; const add=parts.filter(x=>x.email&&x.email!==meEmail()&&!cur.some(c=>(c.email||"").toLowerCase()===x.email)).map(x=>({ email:x.email, name:x.name||"" })); if(!add.length) return; const next=[...cur,...add]; w.values={ ...(w.values||{}), people:next }; await DB.update(WO_COL+"/"+jobId,{ "values.people":next, ...stamp() }).catch(()=>{}); }
+window.__mail={ receive:receiveMail, extractPO, routeAddress };
+if(MOCK) window.__t={ createWO, createThread, W, T, props, now, userRef, get TH(){ return TH; } };   // test harness only
+
+/* ---------- outbound ---------- */
+async function sendMessage(tid,{to,cc,body,attachments}){
+  const t=T(tid); if(!t) return; const w=W(t.jobId);
+  const toL=parseAddrs(to), ccL=parseAddrs(cc);
+  if(!toL.length){ toast("Add at least one recipient.",true); return; }
+  if(!body.trim()&&!(attachments||[]).length){ toast("Write something first.",true); return; }
+  const link=location.origin+location.pathname+"?job="+t.jobId+"&view=ro";
+  const m={ dir:"out", from:{ email:meEmail(), name:S.user.name, uid:S.user.uid }, to:toL, cc:[...ccL,{ email:t.addr }], t:now(), subject:t.subject, text:body.trim(), quote:"", attachments:(attachments||[]).map(a=>({ id:a.id||uid(), name:a.name, size:a.size||0, type:a.type||"", url:a.url||"", noteId:a.noteId||"" })), extracted:{po:[]}, status:MAILCFG?.enabled?"queued":"queued", link, by:userRef() };
+  await DB.add(MAIL_COL+"/"+tid+"/messages",m);
+  const parts=[...(t.participants||[]),...toL,...ccL].filter((p,i,a)=>p.email&&a.findIndex(x=>x.email===p.email)===i);
+  await DB.update(MAIL_COL+"/"+tid,{ last:{ t:m.t, from:m.from, snippet:snippet(m.text) }, count:(t.count||0)+1, participants:parts, ["readBy."+S.user.uid]:m.t });
+  log(t.jobId,`emailed ${toL.map(x=>x.name||x.email).join(", ")} · “${snippet(t.subject,60)}”`);
+  await mergePeople(t.jobId,parts);
+  if(!MAILCFG?.enabled) toast("Queued — it sends as soon as the mail service is connected.");
+}
+async function applyPO(tid,mid,value){ const t=T(tid); if(!t) return; let p=props().find(x=>x.type==="text"&&/^(po|p\.o\.|purchase order)/i.test(x.name)); if(!p){ p={ id:"po", name:"PO #", type:"text" }; S.schema.props.push(p); await saveSchema(); }
+  const w=W(t.jobId); if(!w) return; w.values={ ...(w.values||{}), [p.id]:value }; await DB.update(WO_COL+"/"+t.jobId,{ ["values."+p.id]:value, ...stamp() }); log(t.jobId,`set ${p.name} to ${value} from an email`);
+  const m=MSG.find(x=>x.id===mid); if(m){ const po=(m.extracted?.po||[]).map(x=>x.value===value?{ ...x, applied:true }:x); await DB.update(MAIL_COL+"/"+tid+"/messages/"+mid,{ "extracted.po":po }); } toast(`${p.name} set to ${value}`); }
+
+/* ---------- Inbox tab ---------- */
+function renderInbox(){ if(S.tab!=="inbox") return; renderMailBadge(); renderThreadList(); renderThreadPane(); const sim=$("#ib-sim"); if(sim) sim.hidden=!(S.admin||MOCK); }
+function inboxRows(){ const q=S.q.trim().toLowerCase(); return TH.filter(t=>{ const w=W(t.jobId); if(!w||w.trashed) return false; if(IB.f==="unread"&&!isUnread(t)) return false; if(IB.f==="mine"&&!isMine(t)) return false; if(IB.f==="job"&&IB.job&&t.jobId!==IB.job) return false; if(q&&!(t.subject+" "+(t.participants||[]).map(p=>p.name+" "+p.email).join(" ")+" "+t.jobId+" "+(w.title||"")).toLowerCase().includes(q)) return false; return true; }); }
+function renderThreadList(){
+  $$("#ib-filters [data-f]").forEach(b=>b.setAttribute("aria-selected",b.dataset.f===IB.f)); const jf=$("#ib-jobf"); if(jf) jf.textContent=IB.f==="job"&&IB.job?`${IB.job} ▾`:"Job ▾";
+  const rows=inboxRows(); const byJob=new Map(); rows.forEach(t=>{ if(!byJob.has(t.jobId)) byJob.set(t.jobId,[]); byJob.get(t.jobId).push(t); });
+  const jobs=[...byJob.entries()].map(([id,ts])=>({ id, ts:ts.sort((a,b)=>(b.last?.t||b.created||"").localeCompare(a.last?.t||a.created||"")) })).sort((a,b)=>(b.ts[0].last?.t||b.ts[0].created||"").localeCompare(a.ts[0].last?.t||a.ts[0].created||""));
+  const when=t=>{ const s=t.last?.t||t.created; if(!s) return ""; const d=new Date(s); const today=new Date(); return d.toDateString()===today.toDateString()?d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}):(Date.now()-d<6*86400000?d.toLocaleDateString(undefined,{weekday:"short"}):fmtDate(s)); };
+  $("#ib-rows").innerHTML=jobs.length?jobs.map(({id,ts})=>`<div class="ib-grp" data-job="${id}" title="Open the job"><span class="jid">${id}</span><span class="jt">${P(W(id)?.title||"Untitled")}</span></div>${ts.map(t=>`<div class="ib-row ${isUnread(t)?"unread":""} ${IB.sel===t.id?"sel":""}" data-tid="${t.id}"><span class="u"></span><div class="s"><b>${P(t.subject)}</b><span class="re">${P(aboutLabel(t))}${t.count?` · ${t.count} message${t.count===1?"":"s"}`:""}</span><span>${t.last?`${P(nameOf(t.last.from).split(" ")[0]||"")}: ${P(t.last.snippet||"")}`:`Started by ${P(t.createdBy?.name||"")} · nothing sent yet`}</span></div><span class="w">${P(when(t))}</span></div>`).join("")}`).join("")
+    :`<div class="ib-empty">${TH.length?"Nothing matches this filter.":`<b>No email threads yet.</b><br>Every job has an address — <span class="mono">j-26-008@${MAIL_DOMAIN}</span> — and every thread inside it has one too. CC it from Outlook, or forward a message to it, and the mail shows up here, inside the job.<br><br>Or open a job and press <b>＋ New thread</b>.`}</div>`;
+  $$("#ib-rows .ib-row").forEach(r=>r.onclick=()=>openThread(r.dataset.tid));
+  $$("#ib-rows .ib-grp").forEach(g=>g.onclick=()=>enterWOView(g.dataset.job));
+}
+function renderThreadPane(){
+  const box=$("#ib-thread"); const t=IB.sel?T(IB.sel):null;
+  if(!t){ box.innerHTML=`<div class="ib-blank"><div><b>Pick a thread</b><br>or CC a job address from Outlook and it appears here.<br><span class="hint">${MAILCFG?.enabled?"Mail service connected.":"Mail service not connected yet — outgoing messages queue; nothing is received until it is."}</span></div></div>`; return; }
+  const w=W(t.jobId); if(!w){ box.innerHTML=""; return; }
+  const P0=pts(w); const areaTxt=P0.length?shapeLabel(locShape(w)):"no job area"; const lastNote=NT.length&&ntJob===w.id?NT[NT.length-1]:null;
+  const parts=(t.participants||[]);
+  const me=meEmail(); const others=parts.filter(p=>p.email!==me);
+  const c=IB.compose||{}; const toDefault=c.to!=null?c.to:others.map(p=>p.email).join(", ");
+  const newTo=parseAddrs(toDefault).filter(p=>!parts.some(x=>x.email===p.email));
+  box.innerHTML=`<div class="ib-jobcard"><span class="area"></span><span class="jid">${t.jobId}</span><span class="jt">${P(w.title||"Untitled")}</span>${statusPill(w)}<span class="last">${P(areaTxt)}${lastNote?` · last note · ${P(noteTitle(lastNote))}`:""}</span><span class="sp"></span><button class="btn sm" id="ib-back-list" title="All threads">‹ Threads</button><button class="btn sm teal" id="ib-back">Open job</button></div>
+    <div class="ib-head"><h3>${P(t.subject)}</h3><span class="chip soft">${t.count||0} message${t.count===1?"":"s"}</span><button class="btn sm" id="ib-more">···</button></div>
+    <div class="ib-about">Thread ${t.n} · ${P(aboutLabel(t))}${t.about?.kind==="note"&&t.about.noteId?` <a href="#" data-gonote="${t.about.noteId}">open the note</a>`:""} · started by ${P(t.createdBy?.name||t.createdBy?.email||"")} · <span class="addr">${P(t.addr)} <button class="btn sm ghost" data-copy="${P(t.addr)}">Copy</button></span></div>
+    <div class="ib-parts"><span class="lab">People</span>${parts.map(p=>`<span class="pchip"><span class="avatar sm">${P(initials(nameOf(p)))}</span>${P(nameOf(p))}<span class="st ${onPlatform(p.email)?"on":""}">· ${onPlatform(p.email)?"on platform":"email"}</span></span>`).join("")}</div>
+    <div class="ib-msgs">${MSG.length?MSG.map(m=>msgHTML(t,m)).join(""):`<div class="hint" style="padding:6px 0">Nothing in this thread yet. Anything sent to <span class="mono">${P(t.addr)}</span> lands here.</div>`}</div>
+    <div class="compose" id="ib-compose"><div class="from">Reply as <b>${P(S.user.name)} ‹${P(me)}›</b>${MAILCFG?.enabled?" · via your mailbox":" · queued until the mail service is connected"} · CC <span class="mono">${P(t.addr)}</span> is added automatically</div>
+      <div class="row"><span class="lab">To</span><input id="c-to" placeholder="name@company.com, …" value="${P(toDefault)}"></div>
+      <div class="row"><span class="lab">CC</span><input id="c-cc" placeholder="optional" value="${P(c.cc||"")}"></div>
+      <textarea id="c-body" placeholder="Write a reply…">${P(c.body||"")}</textarea>
+      <div class="catt" id="c-att">${(c.attachments||[]).map(a=>`<span class="file"><span class="ic">${/image/.test(a.type)?"IMG":/pdf/.test(a.type)?"PDF":"FILE"}</span>${P(a.name)}${a.marks?` <span class="sz">✎${a.marks}</span>`:""}<button class="btn sm ghost" data-rmatt="${a.id}" title="Remove">✕</button></span>`).join("")}</div>
+      <div class="foot"><button class="btn sm" id="c-attnote">Attach a note or photo</button><span class="sp"></span><span class="hint" id="c-hint">${newTo.length?`${newTo.map(p=>P(p.email)).join(", ")} ${newTo.length===1?"is":"are"} new here → they can read this thread and the read-only job link, not other threads.`:"Recipients get a read-only link to this job at the bottom of the message."}</span><button class="btn teal" id="c-send">Send</button></div></div>`;
+  $("#ib-back").onclick=()=>{ enterWOView(t.jobId); }; $("#ib-back-list").onclick=closeThread;
+  $("#ib-more").onclick=e=>threadMenu(t,e.currentTarget);
+  $$("#ib-thread [data-copy]").forEach(b=>b.onclick=async()=>{ try{ await navigator.clipboard.writeText(b.dataset.copy); toast("Address copied"); }catch{ prompt("Copy this address",b.dataset.copy); } });
+  $$("#ib-thread [data-gonote]").forEach(a=>a.onclick=e=>{ e.preventDefault(); enterWOView(t.jobId); setTimeout(()=>openNote(a.dataset.gonote),300); });
+  $$("#ib-thread [data-po]").forEach(b=>b.onclick=()=>applyPO(t.id,b.dataset.mid,b.dataset.po));
+  $$("#ib-thread [data-ignorepo]").forEach(b=>b.onclick=async()=>{ const m=MSG.find(x=>x.id===b.dataset.mid); if(!m) return; const po=(m.extracted?.po||[]).map(x=>x.value===b.dataset.ignorepo?{ ...x, ignored:true }:x); await DB.update(MAIL_COL+"/"+t.id+"/messages/"+m.id,{ "extracted.po":po }); });
+  $$("#ib-thread .qtog").forEach(b=>b.onclick=()=>b.closest(".msg").classList.toggle("showq"));
+  const keep=()=>{ IB.compose={ to:$("#c-to").value, cc:$("#c-cc").value, body:$("#c-body").value, attachments:c.attachments||[] }; };
+  ["#c-to","#c-cc","#c-body"].forEach(s=>{ const el=$(s); el.oninput=()=>{ keep(); if(s==="#c-to"){ const nt=parseAddrs(el.value).filter(p=>!parts.some(x=>x.email===p.email)); $("#c-hint").textContent=nt.length?`${nt.map(p=>p.email).join(", ")} ${nt.length===1?"is":"are"} new here → they can read this thread and the read-only job link, not other threads.`:"Recipients get a read-only link to this job at the bottom of the message."; } }; });
+  $$("#c-att [data-rmatt]").forEach(b=>b.onclick=()=>{ keep(); IB.compose.attachments=IB.compose.attachments.filter(a=>a.id!==b.dataset.rmatt); renderThreadPane(); });
+  $("#c-attnote").onclick=e=>{ keep(); attachPicker(t,e.currentTarget); };
+  $("#c-send").onclick=async()=>{ keep(); const b=$("#c-send"); b.disabled=true; try{ await sendMessage(t.id,IB.compose); IB.compose=null; }catch(err){ toast("Could not send: "+(err.message||err),true); } b.disabled=false; renderThreadPane(); };
+  if(c.focus!==false&&IB.compose&&!MSG.length) $("#c-body").focus();
+  const msgs=$("#ib-thread .ib-msgs"); if(msgs&&MSG.length&&!IB.compose) box.scrollTop=box.scrollHeight;
+}
+function msgHTML(t,m){
+  const mine=(m.from?.email||"").toLowerCase()===meEmail();
+  const po=(m.extracted?.po||[]).filter(x=>!x.ignored);
+  const via=m.dir==="out"?(m.status==="queued"?"sent from Dispatch · queued":m.status==="failed"?"sent from Dispatch · failed":"sent from Dispatch"):(m.from?.email||"")+" · via email";
+  return `<div class="msg ${mine?"mine":""} ${m.status==="queued"?"queued":""}"><div class="h"><span class="avatar sm">${P(initials(nameOf(m.from)))}</span><b>${P(nameOf(m.from))}</b><span class="via">${P(via)}</span>${m.status==="queued"||m.status==="failed"?`<span class="st ${m.status}">${m.status}</span>`:""}<span class="t" title="${P(fmtDate(m.t,true))}">${P(fmtDate(m.t,true))}</span></div>
+    ${m.to?.length&&m.dir==="out"?`<div class="h" style="border-bottom:1px solid var(--line);color:var(--ink-3)">to ${m.to.map(x=>P(nameOf(x))).join(", ")}${m.cc?.filter(x=>!String(x.email).endsWith("@"+MAIL_DOMAIN)).length?` · cc ${m.cc.filter(x=>!String(x.email).endsWith("@"+MAIL_DOMAIN)).map(x=>P(nameOf(x))).join(", ")}`:""}</div>`:""}
+    <div class="b">${P(m.text||"")}${m.link?`\n\n<span class="hint">↳ View job ${P(t.jobId)} (read-only link, expires in 30 days)</span>`:""}</div>
+    ${po.map(x=>`<div class="ext ${x.applied?"done":""}"><span class="k">${x.applied?"Set":"Found"}</span><span class="v">PO ${P(x.value)}</span><span class="why">${x.applied?"on the job":"in this message"}${x.src?` · “…${P(x.src)}…”`:""}</span><span class="sp"></span>${x.applied?"":`<button class="btn sm teal" data-po="${P(x.value)}" data-mid="${m.id}">Set as job PO #</button><button class="btn sm ghost" data-ignorepo="${P(x.value)}" data-mid="${m.id}">Ignore</button>`}</div>`).join("")}
+    ${m.quote?`<button class="qtog">▸ quoted text</button><div class="q">${P(m.quote)}</div>`:""}
+    ${m.attachments?.length?`<div class="att">${m.attachments.map(a=>`<a class="file" href="${P(a.url||"#")}" target="_blank" rel="noopener"><span class="ic">${/image/.test(a.type)?"IMG":/pdf/.test(a.type)?"PDF":"FILE"}</span>${P(a.name)}${a.size?` <span class="sz">${fmtBytes(a.size)}</span>`:""}${m.dir==="in"?` <span class="to">→ in job Files</span>`:a.noteId?` <span class="to">from a note</span>`:""}</a>`).join("")}</div>`:""}</div>`;
+}
+function threadMenu(t,anchor){ const el=openPop(anchor,`<div class="mi" data-a="job">Open job ${t.jobId}</div><div class="mi" data-a="copy">Copy thread address</div><div class="mi" data-a="copyjob">Copy job address</div><div class="hr"></div><div class="mi" data-a="rename">Rename thread…</div>${S.admin||MOCK?`<div class="mi" data-a="sim">Test: receive a reply here…</div>`:""}`,{width:240,noFocus:true});
+  el.onclick=async e=>{ const a=e.target.closest("[data-a]")?.dataset.a; if(!a) return; closePop();
+    if(a==="job") enterWOView(t.jobId);
+    if(a==="copy"||a==="copyjob"){ const v=a==="copy"?t.addr:jobAddr(t.jobId); try{ await navigator.clipboard.writeText(v); toast("Address copied"); }catch{ prompt("Copy this address",v); } }
+    if(a==="rename"){ const s=prompt("Thread subject",t.subject); if(s&&s.trim()&&s.trim()!==t.subject) await DB.update(MAIL_COL+"/"+t.id,{ subject:s.trim() }); }
+    if(a==="sim") simInbound(anchor,t); }; }
+function attachPicker(t,anchor){ const w=W(t.jobId); if(!w) return; if(ntJob!==w.id){ watchNotes(w.id); watchPhotos(w.id); }
+  const el=openPop(anchor,"",{width:320,noFocus:true});
+  const draw=()=>{ const items=NT.map(n=>{ const p=n.kind==="photo"?PH.find(x=>x.id===n.photoId):null; return { n, p, files:n.files||[] }; }).filter(x=>x.p||x.files.length);
+    el.innerHTML=`<div class="sec">Attach from this job</div>${items.length?items.map(({n,p,files})=>`<div class="mi" data-n="${n.id}">${KIND_ICON[n.kind]} ${P(noteTitle(n))}<span class="r">${p?`photo${p.marks?.length?` · ✎${p.marks.length}`:""}`:`${files.length} file${files.length===1?"":"s"}`}</span></div>`).join(""):`<div class="hint" style="padding:6px 8px">No photos or files on this job yet.</div>`}`;
+    el.querySelectorAll("[data-n]").forEach(mi=>mi.onclick=()=>{ const n=N(mi.dataset.n); const att=IB.compose?.attachments||[]; if(n.kind==="photo"){ const p=PH.find(x=>x.id===n.photoId); if(p&&!att.some(a=>a.noteId===n.id)) att.push({ id:uid(), name:`${noteTitle(n)}.jpg`, type:"image/jpeg", url:p.thumb, noteId:n.id, marks:(p.marks||[]).length }); } (n.files||[]).forEach(f=>{ if(!att.some(a=>a.id===f.id)) att.push({ id:f.id, name:f.name, size:f.size||0, type:f.type||"", url:f.url, noteId:n.id }); }); IB.compose={ ...(IB.compose||{}), attachments:att, focus:false }; closePop(); renderThreadPane(); }); };
+  draw(); }
+/* Admin/test only: write an inbound message exactly as the mail service would. Lets the flow be exercised before DNS and the function exist. */
+function simInbound(anchor,t){ const jobs=live(); const el=openPop(anchor,`<div class="sec">Simulate an inbound email</div>
+    <div class="fr"><input class="in" id="si-to" placeholder="to address" value="${P(t?t.addr:jobs[0]?jobAddr(jobs[0].id):"")}"></div>
+    <div class="fr"><input class="in" id="si-from" placeholder="from (name <email>)" value="Dave Moreau <dave.moreau@arcelormittal.com>"></div>
+    <div class="fr"><input class="in" id="si-subj" placeholder="subject" value="${P(t?"Re: "+t.subject:"FW: PO 4500218871 – roof survey")}"></div>
+    <div class="fr"><textarea class="in" id="si-text" rows="4" placeholder="body">${P(t?"Confirmed, see you Monday.":"PO is through, please confirm the mobilization date.\n\n---------- Forwarded message ----------\nFrom: procurement@dofasco.arcelormittal.com\nSubject: Purchase Order 4500218871")}</textarea></div>
+    <div class="fr"><label class="hint" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="si-att"> attach a sample PDF</label><span class="sp" style="flex:1"></span><button class="btn sm teal" id="si-go">Receive</button></div>`,{width:360,noFocus:true});
+  el.querySelector("#si-go").onclick=async()=>{ const fm=el.querySelector("#si-from").value.trim(); const mm=fm.match(/^(.*?)\s*<([^>]+)>$/); const from=mm?{ name:mm[1].trim(), email:mm[2].trim() }:{ name:"", email:fm }; const raw=el.querySelector("#si-text").value; const [text,...q]=raw.split(/\n-{3,}.*\n/); try{ const r=await receiveMail({ to:[el.querySelector("#si-to").value.trim()], from, subject:el.querySelector("#si-subj").value.trim(), text:text.trim(), quote:q.join("\n").trim(), attachments:el.querySelector("#si-att").checked?[{ name:"PO_4500218871.pdf", size:212*1024, type:"application/pdf", url:"data:application/pdf;base64,JVBERi0xLjQKJcOkw7zDtsOfCjEgMCBvYmoKPDwvVHlwZS9DYXRhbG9nL1BhZ2VzIDIgMCBSPj4KZW5kb2JqCjIgMCBvYmoKPDwvVHlwZS9QYWdlcy9LaWRzW10vQ291bnQgMD4+CmVuZG9iagp0cmFpbGVyCjw8L1Jvb3QgMSAwIFI+Pg==" }]:[] }); closePop(); toast(`Received into ${T(r.tid)?.jobId||""}${r.extracted.po.length?` · found PO ${r.extracted.po[0].value}`:""}`); if(S.tab==="inbox") openThread(r.tid); }catch(err){ toast(err.message||String(err),true); } }; }
+
+/* ---------- job panel: Email section ---------- */
+function mailStripHTML(w){ return `<div class="strip" id="mailstrip"><span class="lab">Email</span><span class="val mono" style="font-size:12px">${P(jobAddr(w.id))}</span><button class="btn sm" data-copy="${P(jobAddr(w.id))}" title="Copy — CC this from Outlook and the mail lands in this job">Copy</button></div>`; }
+function mailSectionHTML(w){ const ts=jobThreads(w.id); const un=ts.filter(isUnread).length;
+  return `<section class="ps" id="mail"><h3 style="cursor:default">Email <span class="mono" style="font-weight:400">${ts.length}${un?` · ${un} unread`:""}</span><button class="btn sm teal" id="m-new" style="margin-left:auto">＋ New thread</button></h3>
+    ${ts.length?ts.map(t=>`<div class="thr" data-tid="${t.id}"><span class="u ${isUnread(t)?"":"z"}"></span><div class="t"><b>${P(t.subject)}</b><span>${t.last?`${P(nameOf(t.last.from))} · `:""}${t.count||0} message${t.count===1?"":"s"}${t.last?` · ${P(rel(t.last.t))}`:""} · ${P(aboutLabel(t))}</span></div><span class="n">t${t.n}</span><span class="go">›</span></div>`).join(""):`<div class="hint">No threads. CC <span class="mono">${P(jobAddr(w.id))}</span> from Outlook, forward a message to it, or start one here.</div>`}</section>`; }
+function wireMailSection(w){ $$("#pbody [data-copy]").forEach(b=>b.onclick=async()=>{ try{ await navigator.clipboard.writeText(b.dataset.copy); toast("Address copied — CC it from Outlook"); }catch{ prompt("Copy this address",b.dataset.copy); } });
+  $("#m-new")?.addEventListener("click",()=>newThreadFrom(w.id,{kind:"job"}));
+  $$("#pbody .thr").forEach(r=>r.onclick=()=>openThread(r.dataset.tid)); }
+function renderMailSection(){ const w=W(S.open); const el=$("#mail"); if(!w||!el||S.note||S.creating) return; const tmp=document.createElement("div"); tmp.innerHTML=mailSectionHTML(w); el.replaceWith(tmp.firstElementChild); wireMailSection(w); }
 
 boot();
 </script>
