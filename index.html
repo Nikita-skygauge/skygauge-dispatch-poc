@@ -712,12 +712,15 @@ function startApp(){
   }));
   S.unsub.push(DB.watchDoc("workspace/site", d=>{
     const first=!S.site;
+    const before=JSON.stringify(S.site?.boundary||null);
     if(!d){ if(first){ S.site={ boundary:DEFAULT_BOUNDARY }; DB.set("workspace/site",S.site).catch(console.error); } }
     else S.site=d;
-    if(first){ if(S.mapsKey!==undefined) initMap(); } else if(map){ drawSite(); applyCameraLimits(); }
+    if(first){ if(S.mapsKey!==undefined) initMap(); } else if(map&&JSON.stringify(S.site?.boundary||null)!==before){ drawSite(); applyCameraLimits(); }   // only a real boundary change redraws and reframes
   }));
   S.unsub.push(DB.watchCol(WO_COL, rows=>{
     S.wos=rows.sort((a,b)=>(a.seq||0)-(b.seq||0));
+    // the job we are inside was trashed or deleted elsewhere → leave it cleanly (every layer, every mode)
+    if(S.open){ const cur=W(S.open); if(!cur||cur.trashed){ const id=S.open; if(S.creating===id) cancelCreate(); else if(S.woView) exitWOView(); else closePeek(); if(!cur||cur.trashed) toast(`${id} was ${cur?"moved to Trash":"deleted"} by another user.`); } }
     purgeTrash(); syncOverlays(); renderAll();
   }));
   S.unsub.push(DB.watchCol(AS_COL, rows=>{
@@ -1142,10 +1145,13 @@ function openWO(id,fly){
   const w=W(id); if(!w) return;
   if(S.creating&&S.creating!==id){ cancelCreate(); }   // opening another record abandons the unfinished draft
   if(S.open!==id){ showEmpty=false; showAct=false; actUnsub?.(); ACT=[]; actUnsub=DB.watchCol(WO_COL+"/"+id+"/activity",rows=>{ ACT=rows.sort((a,b)=>b.t.localeCompare(a.t)); if(S.open===id) renderActivity(); }); }
+  if(S.open!==id&&S.open&&typeof leaveJobScene==="function") leaveJobScene();
   if(S.open!==id){ selPt=null; editLoc=null; S.note=null; document.body.classList.remove("note-view"); if(isMobile()) setSheet("half"); } S.open=id; document.body.classList.add("peek-open"); watchPhotos(id); watchNotes(id); $("#peek").classList.add("on"); $("#reg").classList.remove("open"); renderRecord(); highlightCard(id); syncPointHandles();
   if(fly&&map) flyWO(w);
 }
-function closePeek(){ closeViewer(); stopPhotos(); stopNotes(); clearPointHandles(); editLoc=null; S.note=null; document.body.classList.remove("note-view"); S.open=null; document.body.classList.remove("peek-open"); $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null); }
+function closePeek(){ closeViewer(); if(typeof leaveJobScene==="function") leaveJobScene(); stopPhotos(); stopNotes(); editLoc=null; S.note=null; document.body.classList.remove("note-view"); S.open=null; document.body.classList.remove("peek-open"); $("#peek").classList.remove("on"); actUnsub?.(); actUnsub=null; closePop(); highlightCard(null);
+  if(S.woView){ S.woView=false; LOCK=null; document.body.classList.remove("wo-view"); if(typeof resetMode==="function") resetMode(); if(typeof orbitSync==="function") orbitSync(); }   // closing the panel from any tab also leaves the job view
+  if(typeof syncJobLabels==="function") syncJobLabels(); }
 function highlightCard(id){ $$(".kcard.hl").forEach(c=>c.classList.remove("hl")); if(id){ const c=document.querySelector(`.kcard[data-id="${id}"]`); if(c){ c.classList.add("hl"); c.scrollIntoView({block:"nearest"}); } } }
 let lastRendered=null, editLoc=null;   // editLoc: the record whose job area is expanded for editing
 function renderRecord(){
@@ -1399,22 +1405,39 @@ async function exportJSON(){
    ===================================================================== */
 let map=null, lib=null; const OV={ wo:{}, asset:{}, site:null, draw:[] }; let placePin=null;
 const V={ draw:null, placing:null };
-/* Maps 3D (beta) keeps drawing a removed marker until the camera changes — the element is gone from the DOM but its
-   sprite stays on screen. After any batch of marker removals, nudge the heading by a hair and back on the next frame so
-   the engine repaints. Skipped while a fly is in progress (its own frames repaint). */
-let redrawT=0;
-let redrawRetry=0, redrawBack=0, redrawSign=1;
-/* The nudge is one-sided and stays for ~400 ms: an immediate revert on the next frame collapses into "no change" in the
-   engine and nothing repaints (seen live: notes lingered until the camera moved). The step back comes later and is itself
-   a second repaint. 0.001° of heading is invisible. */
-/* Maps 3D (beta) can keep drawing a marker that was removed while a camera flight was in progress (reproduced live:
-   note → exit mid-flight). Burying elements or nudging the camera made things worse (leaked objects seem to be keyed by
-   content, so the fresh marker inherited the buried state; heading pokes could abort a flight and corrupt the range).
-   The fix that holds: stop any camera animation before a batch of removals, then remove. */
+/* SCENE — one door for everything that leaves the 3D map.
+   Maps 3D (beta) can keep drawing a marker that was removed while the camera was moving (reproduced live: open a nested
+   note → Exit Job mid-flight → the note pins stay on screen with no DOM behind them until a hard refresh). Nudging the
+   camera or burying elements made it worse. What holds: never call remove() while the camera is in motion. Every removal
+   goes into a queue that flushes on the first frame the camera has been still for CAM_QUIET ms (a flight we started is
+   stopped first by the exit paths, so the wait is a few frames); a hard cap keeps a long drag from holding removals forever.
+   Two extra layers: note pins are diffed by signature instead of rebuilt on every hover (far fewer removals), and every exit
+   path ends in leaveJobScene(), which also sweeps the map for anything not in a registry. */
+const CAM_QUIET=150, CAM_CAP=2500;
+const SCENE={ lastCam:0, q:new Set(), pending:false, since:0, sweep:false, removedInFlight:0 };
+function sceneCamEvent(){ SCENE.lastCam=performance.now(); }
+function cameraBusy(){ return (typeof flying!=="undefined"&&flying) || (performance.now()-SCENE.lastCam)<CAM_QUIET; }
 function stopFlight(){ if(!map) return; try{ if(typeof flying!=="undefined"&&flying){ map.stopCameraAnimation?.(); flying=false; clearTimeout(flyT); } }catch{} }
-function killEl(x){ if(!x) return; try{ x.remove(); }catch{} }
-function killAll(a){ if(!a||!a.length) return; stopFlight(); a.forEach(killEl); }
-function mapRedraw(){ /* no camera pokes: they interfered with flights; removals are made safe by stopFlight() instead */ }
+function killEl(x){ if(!x) return; SCENE.q.add(x); sceneSchedule(); }
+function killAll(a){ if(!a||!a.length) return; a.forEach(x=>{ if(x) SCENE.q.add(x); }); sceneSchedule(); }
+function sceneKeep(x){ SCENE.q.delete(x); }   // an element queued for removal that is wanted again (pin un-hidden) stays
+function sceneSchedule(){ if(SCENE.pending) return; SCENE.pending=true; SCENE.since=performance.now(); requestAnimationFrame(sceneTick); }
+function sceneTick(){ if(!map){ SCENE.pending=false; return; } const waited=performance.now()-SCENE.since;
+  if(cameraBusy()&&waited<CAM_CAP){ requestAnimationFrame(sceneTick); return; }
+  SCENE.pending=false; if(cameraBusy()) SCENE.removedInFlight+=SCENE.q.size;   // cap hit: recorded so the test harness sees it
+  const list=[...SCENE.q]; SCENE.q.clear(); list.forEach(x=>{ try{ x.remove(); }catch{} });
+  if(SCENE.sweep){ SCENE.sweep=false; sceneSweepNow(); } }
+/* Registry sweep: anything attached to the map that no live overlay owns is removed (a DOM-level leak). */
+function sceneKnown(){ const k=new Set(); const add=x=>{ if(x) k.add(x); };
+  Object.values(OV.wo).forEach(o=>{ if(o.hidden) return; if(!o.pinHidden) add(o.m); add(o.area); add(o.line); add(o.box); (o.labels||[]).forEach(add); }); add(OV.site); (OV.draw||[]).forEach(add);
+  if(typeof PTH!=="undefined") PTH.forEach(add); if(typeof PINOV!=="undefined") Object.values(PINOV).forEach(a=>a.forEach(add)); if(typeof PHOV!=="undefined") Object.values(PHOV).forEach(o=>{ add(o.m); (o.sight||[]).forEach(add); });
+  return k; }
+function sceneChildren(){ if(!map) return []; const c=map.children; return Array.isArray(c)?c.slice():[...c].filter(el=>/^GMP-/i.test(el.tagName||"")); }
+function sceneSweepNow(){ const known=sceneKnown(); const stray=sceneChildren().filter(el=>!known.has(el)); if(stray.length){ console.warn("scene sweep removed",stray.length); SCENE.swept=(SCENE.swept||0)+stray.length; stray.forEach(x=>{ try{ x.remove(); }catch{} }); } }
+function sceneSweep(){ SCENE.sweep=true; sceneSchedule(); }
+/* Every way out of a job's view ends here: stop the camera, drop the job-only layers, then sweep once the camera is still. */
+function leaveJobScene(){ stopFlight(); if(typeof clearDraw==="function") clearDraw(); if(typeof clearPointHandles==="function") clearPointHandles(); if(typeof clearPinOverlays==="function") clearPinOverlays(); if(typeof clearPhotoOverlays==="function") clearPhotoOverlays(); sceneSweep(); }
+function mapRedraw(){ /* intentionally nothing: camera pokes interfered with flights; the removal queue does the work */ }
 const BOUNDARY=()=>S.site?.boundary||DEFAULT_BOUNDARY;
 function inPoly(p,poly){ let c=false; for(let i=0,j=poly.length-1;i<poly.length;j=i++){ const a=poly[i],b=poly[j]; if(((a.lat>p.lat)!==(b.lat>p.lat))&&(p.lng<(b.lng-a.lng)*(p.lat-a.lat)/(b.lat-a.lat)+a.lng)) c=!c; } return c; }
 function offset(lat,lng,dx,dy){ return { lat:lat+dy/111320, lng:lng+dx/(111320*Math.cos(lat*Math.PI/180)) }; }
@@ -1439,7 +1462,11 @@ function loadGoogle(key){ (g=>{var h,a,k,p="The Google Maps JavaScript API",c="g
 let mapInit=false;
 /* Headless test harness: ?mock=1&map=stub swaps Google's 3D library for inert stand-ins so the 3D selector and overlays run without WebGL. */
 function stubMaps3D(){ class El{ constructor(o){ Object.assign(this,o||{}); this.children=[]; this.style={}; this.listeners={}; } append(...c){ this.children.push(...c); c.forEach(x=>x.parent=this); } remove(){ if(this.parent){ this.parent.children=this.parent.children.filter(x=>x!==this); this.parent=null; } } addEventListener(t,f){ (this.listeners[t]??=[]).push(f); } removeEventListener(t,f){ this.listeners[t]=(this.listeners[t]||[]).filter(x=>x!==f); } fire(t,e){ (this.listeners[t]||[]).forEach(f=>f(e||{})); } }
-  class M3 extends El{ constructor(o){ super(o); this.classList=document.createElement("div").classList; this.center=o?.center; this.range=o?.range; this.tilt=o?.tilt; this.heading=o?.heading; } flyCameraTo({endCamera}){ Object.assign(this,endCamera||{}); setTimeout(()=>this.fire("gmp-animationend"),10); } flyCameraAround(){} }
+  class M3 extends El{ constructor(o){ super(o); this.classList=document.createElement("div").classList; this.center=o?.center; this.range=o?.range; this.tilt=o?.tilt; this.heading=o?.heading; this.flightActive=false; this.removedInFlight=0; this.removals=0; }
+    flyCameraTo({endCamera,durationMillis=300}){ const ms=Math.min(durationMillis,600); Object.assign(this,endCamera||{}); this.flightActive=true; clearInterval(this._fi); this._fi=setInterval(()=>this.fire("gmp-centerchange"),16); clearTimeout(this._ft); this._ft=setTimeout(()=>{ this.flightActive=false; clearInterval(this._fi); this.fire("gmp-animationend"); },ms); }
+    stopCameraAnimation(){ this.flightActive=false; clearInterval(this._fi); clearTimeout(this._ft); }
+    flyCameraAround(){} }
+  El.prototype.remove=function(){ if(this.parent){ this.parent.removals++; if(this.parent.flightActive){ this.parent.removedInFlight++; (this.parent.inFlightStacks??=[]).push(new Error().stack.split('\n').slice(1,5).join(' | ')); } this.parent.children=this.parent.children.filter(x=>x!==this); this.parent=null; } };
   return { Map3DElement:M3, Marker3DElement:El, Marker3DInteractiveElement:El, Polyline3DElement:El, Polyline3DInteractiveElement:El, Polygon3DElement:El }; }
 /* Desktop preview while placing points: a dashed line from the latest point to the cursor and a translucent pin under it.
    Maps 3D has no hover position and no projection API, so the latest point is projected here with a pinhole model of
@@ -1492,8 +1519,9 @@ function previewDraw(){ const s=PV.svg; if(!s) return; const d=V.draw; const hov
 function previewCheck(p){ if(!PV.mouse||!map) return; const s=projectLL({ lat:p.lat, lng:p.lng, altitude:p.ground }); if(!s) return; const H=map.clientHeight||1; const err=Math.hypot(s.x-PV.mouse.x,s.y-PV.mouse.y)/H; PV.err=PV.err?PV.err*0.5+err*0.5:err; if(PARAMS.has("debug")) console.log("preview projection error",(err*100).toFixed(1)+"% of viewport"); }
 async function initMap(){
   if(map||mapInit) return; mapInit=true;
-  if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); $("#mapgate").hidden=true; $("#loading").hidden=true;
+  if(MOCK&&PARAMS.get("map")==="stub"){ lib=stubMaps3D(); map=new lib.Map3DElement({ ...siteCam(), mode:"SATELLITE" }); map.addEventListener("gmp-click",onMapClick); ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,sceneCamEvent)); $("#mapgate").hidden=true; $("#loading").hidden=true;
     actBoxInit(); window.__sim={ click:(lat,lng,alt=80)=>map.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), draw:()=>V.draw&&shapeOf(V.draw), overlays:()=>map.children.length, pins:()=>OV.draw.length, tapFirst:()=>OV.draw[0]?.fire("gmp-click",{}), tapPoint:i=>OV.draw[i]?.fire("gmp-click",{}), close:()=>document.querySelector("#sel-hint [data-hint=close]")?.click(), tapLine:(lat,lng,alt=80)=>OV.draw.find(x=>x.__seg!=null)?.fire("gmp-click",{ position:{ lat, lng, altitude:alt } }), handles:()=>PTH.length, tapHandle:i=>PTH[i]?.fire("gmp-click",{}), sel:()=>V.draw?.sel??null, moving:()=>!!V.draw?.moving, proj:(lat,lng,alt=80)=>projectLL({lat,lng,altitude:alt+0.8}), hoverSeg:()=>PV.seg?.i??null, hoverPin:()=>PV.hover, pinFill:i=>Object.values(PINOV)[i]?.[0]?.children?.[0]?.content?.querySelector?.("path")?.getAttribute("fill"), act:k=>ACTBOX?.querySelector(`[data-act="${k}"]`)?.click(), acts:()=>[...(ACTBOX?.querySelectorAll("[data-act]")||[])].map(b=>b.dataset.act), labels:()=>OV.draw.map(m=>m.children?.[0]?.content?.querySelector?.("text")?.textContent).filter(t=>/ m$/.test(t||"")), dist:(a,c)=>dist3(a,c) };
+    window.__scene={ busy:()=>({ busy:cameraBusy(), flying, since:performance.now()-SCENE.lastCam }), stat:()=>({ children:map.children.length, known:sceneKnown().size, removedInFlight:map.removedInFlight, removals:map.removals, flightActive:map.flightActive, queued:SCENE.q.size, capHits:SCENE.removedInFlight, swept:SCENE.swept||0, pinov:Object.keys(PINOV).length, phov:Object.keys(PHOV).length, pth:PTH.length, draw:OV.draw.length, labels:Object.values(OV.wo).reduce((n,o)=>n+(o.labels||[]).length,0), pinHidden:Object.values(OV.wo).filter(o=>o.pinHidden).length, dupPins:Object.values(OV.wo).filter(o=>map.children.filter(c=>c===o.m).length>1).length }), inject:()=>{ const e=new lib.Marker3DElement({ position:{lat:0,lng:0} }); map.append(e); return map.children.length; }, flying:()=>flying, stray:()=>{ const k=sceneKnown(); return map.children.filter(c=>!k.has(c)&&!SCENE.q.has(c)).length; } };
     requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); }); return; }
   const key=getKey(); if(!key){ mapInit=false; showMapGate(); return; }
   $("#mapgate").hidden=true; $("#loading").hidden=false;
@@ -1501,14 +1529,14 @@ async function initMap(){
   const cam=siteCam(), g=siteGeom();
   map=new lib.Map3DElement({ ...cam, mode:"SATELLITE", gestureHandling:"GREEDY", defaultUIDisabled:true });   // no Google on-screen buttons (zoom/pan/tilt/compass); gestures only   // GREEDY = plain Google Maps gestures: scroll zooms without a modifier key, one-finger drag pans. AUTO falls back to "cooperative" (⌘+scroll) in some layouts.
   map.addEventListener("gmp-error",e=>showMapGate("Map error: "+(e.detail?.message||"see console")));
-  map.addEventListener("gmp-click",onMapClick); installLock();
+  map.addEventListener("gmp-click",onMapClick); installLock(); ["gmp-centerchange","gmp-rangechange","gmp-tiltchange","gmp-headingchange","gmp-fovchange"].forEach(ev=>map.addEventListener(ev,sceneCamEvent));
 
   map.addEventListener("dblclick",()=>{ if(S.woView&&S.open&&!V.draw&&!V.placing){ const w=W(S.open); if(w) flyWO(w); } });
   $("#canvas-wrap").prepend(map); $("#loading").hidden=true; previewInit(); if(PARAMS.has("debug")) window.__projectLL=projectLL;
   $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`;
   requestAnimationFrame(()=>{ drawSite(); syncOverlays(); syncPhotoOverlays(); });
 }
-function applyCameraLimits(){ if(!map) return; const c=siteCam(); map.flyCameraTo({ endCamera:c, durationMillis:1200 }); const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
+function applyCameraLimits(){ if(!map) return; const c=siteCam(); fly(c,1200); const g=siteGeom(); $("#m-extent").textContent=`${(g.e.ns/1000).toFixed(1)} × ${(g.e.ew/1000).toFixed(1)} km`; }
 function drawSite(){ if(!map) return; killEl(OV.site); const B=BOUNDARY(); const line=new lib.Polyline3DElement({ altitudeMode:"CLAMP_TO_GROUND", strokeColor:"rgba(0,255,229,0.95)", strokeWidth:5, drawsOccludedSegments:true }); line.path=[...B,B[0]].map(p=>({lat:p.lat,lng:p.lng,altitude:2})); map.append(line); OV.site=line; }
 function syncAssetOverlays(){ /* assets carry no location (register only) */ }
 const rgb = hex => { const n=parseInt(hex.slice(1),16); return `${n>>16},${(n>>8)&255},${n&255}`; };
@@ -1534,10 +1562,10 @@ function addWOOverlay(w){
 }
 /* segment lengths belong to the open job only: strip them from every other job, add them to the open one */
 function syncJobLabels(){ if(!map) return; Object.entries(OV.wo).forEach(([id,o])=>{ const open=S.woView&&S.open===id, on=open&&!S.note; const w=W(id); if(!on&&o.labels?.length){ killAll(o.labels); o.labels=[]; mapRedraw(); } if(on&&!(o.labels?.length)){ if(w&&locKindW(w)!=="point") o.labels=segmentLabels(pts(w),locKindW(w)==="area"); }
-  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ stopFlight(); o.m.remove(); o.pinHidden=true; } else if(!hidePin&&o.pinHidden){ map.append(o.m); o.pinHidden=false; } } }); }
+  const hidePin=open&&w&&locKindW(w)!=="point"; if(o.m){ if(hidePin&&!o.pinHidden){ killEl(o.m); o.pinHidden=true; } else if(!hidePin&&o.pinHidden){ sceneKeep(o.m); if(!o.m.isConnected&&!o.m.parent) map.append(o.m); o.pinHidden=false; } } }); }
 function minGround(P){ const g=P.map(p=>p.ground).filter(x=>x!=null); return g.length?Math.min(...g):GROUND_FALLBACK; }
 function refreshWOOverlay(w,force){ if(!map) return; const o=OV.wo[w.id]; if(!o){ if(!w.trashed) addWOOverlay(w); return; } if(w.trashed||force||o.sig!==JSON.stringify(w.location||{})){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); delete OV.wo[w.id]; mapRedraw(); if(!w.trashed) addWOOverlay(w); return; } const c=woColor(w); o.pin.setFill(c); if(o.area){ o.area.fillColor=`rgba(${rgb(c)},0.28)`; o.area.strokeColor=`rgba(${rgb(c)},0.95)`; } if(o.line) o.line.strokeColor=`rgba(${rgb(c)},0.95)`; applyLegendTo(w); }
-function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(hide&&!o.hidden){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); o.hidden=true; mapRedraw(); } else if(!hide&&o.hidden){ delete OV.wo[w.id]; addWOOverlay(w); } }   // legend off: parts are buried and dropped; back on: rebuilt
+function applyLegendTo(w){ const o=OV.wo[w.id]; if(!o) return; const hide=S.legendOff.has(w.statusId); if(hide&&!o.hidden){ killAll([o.m,o.area,o.line,o.box,...(o.labels||[])]); o.hidden=true; mapRedraw(); } else if(!hide&&o.hidden){ delete OV.wo[w.id]; addWOOverlay(w); syncJobLabels(); } }   // legend off: parts are buried and dropped; back on: rebuilt
 function renderLegend(){ if(!S.schema) return; $("#legend").innerHTML=statuses().map(o=>`<span data-s="${o.id}" class="${S.legendOff.has(o.id)?"off":""}"><i style="background:${col(o.color).map}"></i>${P(o.name)} <span class="mono">${live().filter(w=>w.statusId===o.id).length}</span></span>`).join(""); }
 $("#legend").addEventListener("click",e=>{ const s=e.target.closest("[data-s]"); if(!s) return; S.legendOff.has(s.dataset.s)?S.legendOff.delete(s.dataset.s):S.legendOff.add(s.dataset.s); renderLegend(); live().forEach(applyLegendTo); });
 let flyTok=0; function onFlyEnd(fn){ const tok=++flyTok; const h=()=>{ map.removeEventListener("gmp-animationend",h); if(tok===flyTok) fn(); }; map.addEventListener("gmp-animationend",h); }
@@ -1733,7 +1761,7 @@ let LOCK=null, flying=false, flyT=null;
 function enterWOView(id){ const w=W(id); if(!w) return; const wasHidden=S.tab!=="map"; S.woView=true; document.body.classList.add("wo-view"); setTab("map"); openWO(id); woMode(); orbitSync(); syncPhotoOverlays(); syncPinOverlays(); syncJobLabels();
   // fly only after the map has its final size: an animation started on a hidden or resizing map is dropped by the engine
   if(map){ requestAnimationFrame(()=>requestAnimationFrame(()=>setTimeout(()=>flyWO(w), (isMobile()||wasHidden)?320:60))); } }
-function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); clearPhotoOverlays(); clearPinOverlays(); syncJobLabels(); setTimeout(mapRedraw,350); setTimeout(mapRedraw,1200); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
+function exitWOView(){ S.woView=false; LOCK=null; S.note=null; document.body.classList.remove("note-view"); leaveJobScene(); syncJobLabels(); document.body.classList.remove("wo-view"); closePeek(); resetMode(); orbitSync(); }   // camera stays where it is; the Site button reframes on demand
 function woMode(){ const w=W(S.open); if(!w) return;
   if(S.note&&typeof N==="function"&&N(S.note)){ const n=N(S.note); const par=n.parent?N(n.parent):null; const sibs=(typeof childrenOf==="function"?childrenOf(n.parent||null):[]).length;
     setMode("wo note","Note",`<b>${P(noteTitle(n))}</b> · ${par?`inside ${P(noteTitle(par))}`:`${noteNo(n.id)} of ${sibs||"?"} in ${w.id}`} <button class="btn sm" id="mode-back">‹ Back</button>`,false); $("#mode-back").onclick=()=>closeNote(true); return; }
@@ -2176,21 +2204,26 @@ function pinTileSVG(no){ return `<svg viewBox="0 0 26 36" class="pintile"><path 
 function noteAnchor(k){ const P=notePts(k); if(P.length===1) return P[0]; const c=centroid(P); const g=P.map(x=>x.ground).filter(x=>x!=null); return { ...c, ground:g.length?g.reduce((a,b)=>a+b,0)/g.length:undefined }; }
 function clearPinOverlays(){ const n=Object.keys(PINOV).length; Object.values(PINOV).forEach(a=>killAll(a)); for(const k in PINOV) delete PINOV[k]; if(n) mapRedraw(); }
 function focusPinNote(id,nid){ openNote(nid); }
-function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woView) return; const w=W(S.open); if(!w) return;
+function syncPinOverlays(){ if(!map||!lib||!S.open||!S.woView){ clearPinOverlays(); return; } const w=W(S.open); if(!w){ clearPinOverlays(); return; }
   /* hover: only the hovered note stays lit, everything else (parents included) greys. Inside a note view without a hover: the
      open note plus its ancestors and descendants stay visible for context, the rest greys. */
   const openSet=hoverPin?new Set([hoverPin]):S.note?new Set([S.note,...descendants(S.note).map(x=>x.id),...ancestors(S.note).map(x=>x.id)]):null;
-  NT.filter(n=>n.kind==="model"&&notePts(n).length&&V.draw?.noteId!==n.id).forEach(k=>{ const P=notePts(k); const parts=[]; const mode=surf(P); const lit=hoverPin?hoverPin===k.id:(selPin===k.id||S.note===k.id); const dim=openSet&&!openSet.has(k.id)&&!lit;
+  const want=new Set();
+  NT.filter(n=>n.kind==="model"&&notePts(n).length&&V.draw?.noteId!==n.id).forEach(k=>{ const P=notePts(k); const mode=surf(P); const lit=hoverPin?hoverPin===k.id:(selPin===k.id||S.note===k.id); const dim=openSet&&!openSet.has(k.id)&&!lit;
+    const sh=noteShape(k); const inView=S.note===k.id; const sig=JSON.stringify([w.id,P,sh,lit,dim,noteNo(k.id),inView]);
+    want.add(k.id); const cur=PINOV[k.id]; if(cur&&cur.sig===sig) return;   // unchanged → leave the engine alone (no remove/re-add)
+    if(cur) killAll(cur);
+    const parts=[]; parts.sig=sig;
     const col=lit?"#00FFE5":dim?"#8A93AD":PIN_NOTE_COLOR; const rgbc=lit?"0,255,229":dim?"138,147,173":"255,212,0"; const a=dim?0.55:1;
     const anc=noteAnchor(k); const m=new lib.Marker3DInteractiveElement({ position:atSurf(anc,P.length===1?0.6:1.2), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true });
     const tp=pinTemplate(col,lit?1.25:dim?0.75:0.95,undefined,noteNo(k.id)); if(dim) tp.tpl.content.firstChild?.setAttribute?.("opacity","0.45"); m.append(tp.tpl); m.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); if(S.note===k.id&&P.length===1) selectAt(()=>drawNote(w.id,k.id),0); else openNote(k.id); }); map.append(m); parts.push(m);
-    const sh=noteShape(k);
     if(sh==="line"&&P.length>=2){ const l=new lib.Polyline3DElement({ altitudeMode:mode, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:5, drawsOccludedSegments:true }); l.path=P.map(p=>atSurf(p,0.8)); map.append(l); parts.push(l); }
     if(sh==="area"&&P.length>=3){ const g=new lib.Polygon3DElement({ altitudeMode:mode, fillColor:`rgba(${rgbc},${0.25*a})`, strokeColor:`rgba(${rgbc},${0.95*a})`, strokeWidth:3, drawsOccludedSegments:true }); g.path=[...P,P[0]].map(p=>atSurf(p,0.8)); g.addEventListener?.("gmp-click",ev=>{ if(V.draw||V.placing) return; openNote(k.id); }); map.append(g); parts.push(g); }
-    if(S.note===k.id&&(sh==="line"||sh==="area")) parts.push(...segmentLabels(P,sh==="area"));   // lengths only inside this note's view
-    if(S.note===k.id&&P.length>1){ /* numbered handles inside the note's view: click one → selector with that point selected */
+    if(inView&&(sh==="line"||sh==="area")) parts.push(...segmentLabels(P,sh==="area"));   // lengths only inside this note's view
+    if(inView&&P.length>1){ /* numbered handles inside the note's view: click one → selector with that point selected */
       P.forEach((p,i)=>{ const h=new lib.Marker3DInteractiveElement({ position:atSurf(p,0.8), altitudeMode:mode, sizePreserved:true, drawsWhenOccluded:true }); h.append(pinTemplate("#FF6A00",0.85,undefined,i+1).tpl); h.addEventListener("gmp-click",ev=>{ if(V.draw||V.placing) return; ev.stopPropagation?.(); selectAt(()=>drawNote(w.id,k.id),i); }); map.append(h); parts.push(h); }); }
-    PINOV[k.id]=parts; }); }
+    PINOV[k.id]=parts; });
+  Object.keys(PINOV).forEach(id=>{ if(!want.has(id)){ killAll(PINOV[id]); delete PINOV[id]; } }); }
 
 
 /* =====================================================================
@@ -2279,7 +2312,7 @@ async function receiveMail(msg){
 }
 async function mergePeople(jobId,parts){ const w=W(jobId); const p=prop("people"); if(!w||!p||p.type!=="person") return; const cur=w.values?.people||[]; const add=parts.filter(x=>x.email&&x.email!==meEmail()&&!cur.some(c=>(c.email||"").toLowerCase()===x.email)).map(x=>({ email:x.email, name:x.name||"" })); if(!add.length) return; const next=[...cur,...add]; w.values={ ...(w.values||{}), people:next }; await DB.update(WO_COL+"/"+jobId,{ "values.people":next, ...stamp() }).catch(()=>{}); }
 window.__mail={ receive:receiveMail, extractPO, routeAddress };
-if(MOCK) window.__t={ createWO, createThread, W, T, props, now, userRef, get TH(){ return TH; } };   // test harness only
+if(MOCK) window.__t={ createWO, createThread, W, T, props, now, userRef, enterWOView, exitWOView, openNote, closeNote, trashWO, restoreWO, drawNote, openThread, get TH(){ return TH; }, get OV(){ return OV; }, get map(){ return map; } };   // test harness only
 
 /* ---------- outbound ---------- */
 async function sendMessage(tid,{to,cc,body,attachments}){
