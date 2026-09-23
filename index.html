@@ -597,8 +597,8 @@ function makeFirestore(F, db){
       await F.deleteDoc(D(p)); },
     async add(col,d){ const r=await F.addDoc(C(col),d); return r.id; },
     async list(col){ const s=await F.getDocs(C(col)); return s.docs.map(d=>({id:d.id,...d.data()})); },
-    watchDoc(p,cb){ return F.onSnapshot(D(p),s=>cb(s.exists()?{id:s.id,...s.data()}:null),e=>onDbError(e,p)); },
-    watchCol(col,cb){ return F.onSnapshot(C(col),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))),e=>onDbError(e,col)); },
+    watchDoc(p,cb,onErr){ return F.onSnapshot(D(p),s=>cb(s.exists()?{id:s.id,...s.data()}:null),e=>onErr?onErr(e):onDbError(e,p)); },
+    watchCol(col,cb,onErr){ return F.onSnapshot(C(col),s=>cb(s.docs.map(d=>({id:d.id,...d.data()}))),e=>onErr?onErr(e):onDbError(e,col)); },
     async nextSeq(){ return F.runTransaction(db, async tx=>{ const ref=D("workspace/counters"); const s=await tx.get(ref); const n=((s.exists()&&s.data().wo)||0)+1; tx.set(ref,{wo:n},{merge:true}); return n; }); },
   };
 }
@@ -2204,7 +2204,7 @@ function syncPinOverlays(){ clearPinOverlays(); if(!map||!lib||!S.open||!S.woVie
    service (functions/) writes inbound messages here in exactly the shape this file writes them; nothing guesses.
    ===================================================================== */
 const MAIL_COL="workspace/main/threads", MAIL_DOMAIN="mail.skygauge.co";
-let TH=[], thUnsub=null, MSG=[], msgUnsub=null, msgThread=null, IB={ f:"all", job:null, sel:null, compose:null }, MAILCFG=null;
+let MAILDENIED=false; let TH=[], thUnsub=null, MSG=[], msgUnsub=null, msgThread=null, IB={ f:"all", job:null, sel:null, compose:null }, MAILCFG=null;
 const jobAddr = id => `${String(id).toLowerCase()}@${MAIL_DOMAIN}`;
 const threadAddr = (id,n) => `${String(id).toLowerCase()}-t${n}@${MAIL_DOMAIN}`;
 const T = tid => TH.find(t=>t.id===tid);
@@ -2220,9 +2220,9 @@ function aboutLabel(t){ const a=t.about||{kind:"job"}; if(a.kind==="note") retur
 function snippet(s,n=90){ return String(s||"").replace(/\s+/g," ").trim().slice(0,n); }
 
 /* ---------- subscriptions ---------- */
-function watchMail(){ thUnsub?.(); thUnsub=DB.watchCol(MAIL_COL,rows=>{ TH=rows; if(IB.sel&&S.tab==="inbox"&&document.visibilityState!=="hidden") markRead(IB.sel); renderMailBadge(); if(S.tab==="inbox") renderInbox(); if(S.open&&!S.note&&!S.creating) renderMailSection(); });
+function watchMail(){ thUnsub?.(); thUnsub=DB.watchCol(MAIL_COL,rows=>{ TH=rows; if(IB.sel&&S.tab==="inbox"&&document.visibilityState!=="hidden") markRead(IB.sel); renderMailBadge(); if(S.tab==="inbox") renderInbox(); if(S.open&&!S.note&&!S.creating) renderMailSection(); },e=>{ console.warn("mail threads",e); MAILDENIED=true; if(S.tab==="inbox") renderInbox(); });
   S.unsub.push(()=>{ thUnsub?.(); thUnsub=null; msgUnsub?.(); msgUnsub=null; });
-  S.unsub.push(DB.watchDoc("config/mail",d=>{ MAILCFG=d; if(S.tab==="inbox") renderInbox(); })); }
+  S.unsub.push(DB.watchDoc("config/mail",d=>{ MAILCFG=d; if(S.tab==="inbox") renderInbox(); },e=>{ console.warn("config/mail",e); MAILCFG=null; })); }
 function watchMessages(tid){ if(msgThread===tid) return; msgUnsub?.(); MSG=[]; msgThread=tid; if(!tid) return;
   msgUnsub=DB.watchCol(MAIL_COL+"/"+tid+"/messages",rows=>{ MSG=rows.sort((a,b)=>(a.t||"").localeCompare(b.t||"")); if(IB.sel===tid&&S.tab==="inbox") renderThreadPane(); }); }
 function renderMailBadge(){ const n=unreadCount(); const b=$("#tab-inbox"); if(b) b.textContent=n||""; const u=$("#ib-unread-n"); if(u) u.textContent=n||""; }
@@ -2308,6 +2308,7 @@ function renderThreadList(){
   const rows=inboxRows(); const byJob=new Map(); rows.forEach(t=>{ if(!byJob.has(t.jobId)) byJob.set(t.jobId,[]); byJob.get(t.jobId).push(t); });
   const jobs=[...byJob.entries()].map(([id,ts])=>({ id, ts:ts.sort((a,b)=>(b.last?.t||b.created||"").localeCompare(a.last?.t||a.created||"")) })).sort((a,b)=>(b.ts[0].last?.t||b.ts[0].created||"").localeCompare(a.ts[0].last?.t||a.ts[0].created||""));
   const when=t=>{ const s=t.last?.t||t.created; if(!s) return ""; const d=new Date(s); const today=new Date(); return d.toDateString()===today.toDateString()?d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"}):(Date.now()-d<6*86400000?d.toLocaleDateString(undefined,{weekday:"short"}):fmtDate(s)); };
+  if(MAILDENIED&&!TH.length){ $("#ib-rows").innerHTML=`<div class="ib-empty"><b>The database rules don’t allow email threads yet.</b><br>Paste <span class="mono">firestore.rules.snippet</span> from the mail-service folder into Firebase → Firestore → Rules and publish. Everything else works meanwhile.</div>`; return; }
   $("#ib-rows").innerHTML=jobs.length?jobs.map(({id,ts})=>`<div class="ib-grp" data-job="${id}" title="Open the job"><span class="jid">${id}</span><span class="jt">${P(W(id)?.title||"Untitled")}</span></div>${ts.map(t=>`<div class="ib-row ${isUnread(t)?"unread":""} ${IB.sel===t.id?"sel":""}" data-tid="${t.id}"><span class="u"></span><div class="s"><b>${P(t.subject)}</b><span class="re">${P(aboutLabel(t))}${t.count?` · ${t.count} message${t.count===1?"":"s"}`:""}</span><span>${t.last?`${P(nameOf(t.last.from).split(" ")[0]||"")}: ${P(t.last.snippet||"")}`:`Started by ${P(t.createdBy?.name||"")} · nothing sent yet`}</span></div><span class="w">${P(when(t))}</span></div>`).join("")}`).join("")
     :`<div class="ib-empty">${TH.length?"Nothing matches this filter.":`<b>No email threads yet.</b><br>Every job has an address — <span class="mono">j-26-008@${MAIL_DOMAIN}</span> — and every thread inside it has one too. CC it from Outlook, or forward a message to it, and the mail shows up here, inside the job.<br><br>Or open a job and press <b>＋ New thread</b>.`}</div>`;
   $$("#ib-rows .ib-row").forEach(r=>r.onclick=()=>openThread(r.dataset.tid));
